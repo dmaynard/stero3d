@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 macroquad = "0.4"
+
+[[bin]]
+name = "stero3d"
+path = "src/main.rs"

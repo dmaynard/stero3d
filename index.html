@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stereo3D - 3D Stereogram Cube Viewer</title>
+    <style>
+        html,
+        body,
+        canvas {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: absolute;
+            background: black;
+            z-index: 0;
+        }
+        
+        /* Improve font rendering for better typography */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-smooth: always;
+        }
+        
+        /* Ensure canvas has crisp rendering */
+        canvas {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        
+        /* Description overlay styles */
+        .description-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .description-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid #4a4a6a;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 700px;
+            max-height: 80vh;
+            margin: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            color: #e0e0e0;
+            font-size: 16px;
+            line-height: 1.6;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .description-title {
+            color: #64b5f6;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .description-text {
+            margin-bottom: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .description-text p {
+            margin-bottom: 15px;
+        }
+        
+        .description-text strong {
+            color: #81c784;
+            font-weight: 600;
+        }
+        
+        .description-text em {
+            color: #ffb74d;
+            font-style: italic;
+        }
+        
+        .controls-section {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .close-button {
+            background: linear-gradient(135deg, #4a4a6a 0%, #3a3a5a 100%);
+            border: 1px solid #6a6a8a;
+            color: #e0e0e0;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: block;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .close-button:hover {
+            background: linear-gradient(135deg, #5a5a7a 0%, #4a4a6a 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .close-button:active {
+            transform: translateY(0);
+        }
+        
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glcanvas" tabindex='1'></canvas>
+    
+    <!-- Description overlay -->
+    <div class="description-overlay" id="descriptionOverlay">
+        <div class="description-content">
+            <div class="description-title">Stereo3D - 3D Stereogram Cube Viewer</div>
+            <div class="description-text">
+                <p>
+                    Welcome to <strong>Stereo3D</strong>, a real-time 3D stereogram viewer that displays a rotating wireframe cube 
+                    using the parallel stereogram technique. View true 3D without special glasses!
+                </p>
+                
+                <p>
+                    This application was built with Rust and the Macroquad game engine, creating a smooth, 
+                    interactive 3D stereogram experience that works right in your web browser.
+                </p>
+                
+                <p>
+                    <strong>How Stereograms Work:</strong><br>
+                    A stereogram creates a 3D illusion by presenting slightly different images to each eye. 
+                    This app renders the same 3D cube from two camera positions (left and right eye), 
+                    separated by a configurable distance. When viewed correctly, your brain merges these 
+                    two images into a single 3D scene.
+                </p>
+                
+                <div class="controls-section">
+                    <strong>Animation Controls:</strong><br>
+                    • <em>SPACE:</em> Toggle pause/resume animation<br>
+                    <br>
+                    <strong>Viewing Adjustments:</strong><br>
+                    • <em>LEFT/RIGHT Arrow:</em> Adjust eye separation (0.01 to 0.20)<br>
+                    • <em>UP/DOWN Arrow:</em> Adjust perspective distance and cube scale (2.0 to 20.0)<br>
+                    <br>
+                    <strong>Display Options:</strong><br>
+                    • <em>G:</em> Toggle fusion guides (red circles)<br>
+                    • <em>C:</em> Toggle depth-based wireframe coloring<br>
+                    • <em>B:</em> Toggle between black/white backgrounds<br>
+                    • <em>T:</em> Toggle all on-screen text and UI elements
+                </div>
+                
+                <p>
+                    <strong>How to View the Stereogram:</strong><br>
+                    1. Position yourself about 2-3 feet from the screen<br>
+                    2. Relax your eyes and look "through" the screen (like looking into the distance)<br>
+                    3. Focus on the red guide circles at the top of each view<br>
+                    4. Let your eyes merge the two images - you should see three cubes<br>
+                    5. Focus on the center cube - this is your 3D stereogram!
+                </p>
+                
+                <p>
+                    <strong>Tips for easier fusion:</strong><br>
+                    • Start with the default settings<br>
+                    • Use the red guide circles as a target<br>
+                    • Adjust eye separation if needed (LEFT/RIGHT arrows)<br>
+                    • Try different perspective distances (UP/DOWN arrows)<br>
+                    • Practice with the pause feature (SPACE) to hold still images
+                </p>
+                
+                <p>
+                    The wireframe rendering includes depth-based coloring where closer wires appear brighter 
+                    and farther wires appear darker, helping your brain understand the 3D structure.
+                </p>
+                
+                <p>
+                    I built this application with <a href="https://cursor.com" target="_blank" style="color: #64b5f6; text-decoration: none;">Cursor an AI Code Editor</a>, 
+                    the Rust language and the <a href="https://macroquad.rs" target="_blank" style="color: #64b5f6; text-decoration: none;">Macroquad Game Engine</a>
+                </p>
+                
+                <p style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #4a4a6a;">
+                    <strong>Created by David Maynard</strong><br>
+                    <a href="https://github.com/dmaynard/stero3d" target="_blank" style="color: #64b5f6; text-decoration: none;">View open source code on GitHub</a>
+                </p>
+            </div>
+            <button class="close-button" onclick="document.getElementById('descriptionOverlay').classList.add('hidden')">
+                Start Viewing 3D
+            </button>
+        </div>
+    </div>
+    
+    <!-- Local copy of macroquad JavaScript bundle -->
+    <script src="mq_js_bundle.js"></script>
+    <script>load("stero3d.wasm");</script> <!-- Your compiled WASM binary -->
+</body>
+</html>
