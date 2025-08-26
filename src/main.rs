@@ -25,9 +25,12 @@ const CUBE_EDGES: [(usize, usize); 12] = [
 struct StereogramViewer {
     rotation: f32,
     eye_separation: f32,
+    perspective_distance: f32,
     is_paused: bool,
     show_guides: bool,
     depth_coloring: bool,
+    show_ui: bool,
+    dark_background: bool,
 }
 
 impl StereogramViewer {
@@ -35,9 +38,12 @@ impl StereogramViewer {
         Self {
             rotation: 0.0,
             eye_separation: 0.06, // Reduced for iPhone dimensions
+            perspective_distance: 10.0, // Initial perspective distance
             is_paused: false,
             show_guides: true,
             depth_coloring: true,
+            show_ui: true,
+            dark_background: true,
         }
     }
 
@@ -60,8 +66,10 @@ impl StereogramViewer {
         // Transform and project vertices to 2D screen space manually
         let screen_center_x = screen_width() / 4.0 + screen_offset_x; // Quarter width + offset for each view
         let screen_center_y = screen_height() / 2.0;
-        let scale = 180.0; // Reduced for iPhone dimensions
-        let perspective_distance = 4.0; // Doubled from 2.0 to reduce perspective distortion
+        // Adjust scale to maintain cube size as perspective changes
+        let base_scale = 180.0;
+        let scale = base_scale * (self.perspective_distance / 4.0); // Scale proportionally with distance
+        let perspective_distance = self.perspective_distance; // Use adjustable perspective distance
 
         // Project each vertex to 2D screen coordinates
         let mut projected_vertices = Vec::new();
@@ -103,16 +111,26 @@ impl StereogramViewer {
                 let avg_z = (start_z + end_z) / 2.0;
                 
                 // Map Z distance to color intensity (closer = brighter, farther = darker)
-                // Typical Z range is about 3.0 to 5.0, so we'll normalize around that
-                let min_z = 3.0;
-                let max_z = 5.0;
+                // Dynamic Z range based on current perspective distance
+                let min_z = self.perspective_distance - 1.0;
+                let max_z = self.perspective_distance + 1.0;
                 let intensity = ((max_z - avg_z) / (max_z - min_z)).clamp(0.2, 1.0);
                 
-                // Create color based on depth
-                Color::new(intensity, intensity, intensity, 1.0)
+                // Create color based on depth and background
+                if self.dark_background {
+                    // Dark background: use white to light gray
+                    Color::new(intensity, intensity, intensity, 1.0)
+                } else {
+                    // Light background: use black to dark gray
+                    Color::new(1.0 - intensity, 1.0 - intensity, 1.0 - intensity, 1.0)
+                }
             } else {
-                // Use plain white color
-                WHITE
+                // Use plain color based on background
+                if self.dark_background {
+                    WHITE
+                } else {
+                    BLACK
+                }
             };
             
             draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, wire_color);
@@ -124,8 +142,12 @@ impl StereogramViewer {
         let screen_height = screen_height();
         let half_width = screen_width / 2.0;
         
-        // Clear the screen
-        clear_background(BLACK);
+        // Clear the screen with current background setting
+        if self.dark_background {
+            clear_background(BLACK);
+        } else {
+            clear_background(WHITE);
+        }
         
         // Use default 2D camera for all rendering
         set_default_camera();
@@ -138,30 +160,18 @@ impl StereogramViewer {
         
         // Draw guides only if show_guides is true
         if self.show_guides {
-            // Draw a dividing line between the two views
-            draw_line(half_width, 0.0, half_width, screen_height, 2.0, GRAY);
+            // Add fusion aids - outline circles just above the cubes
+            let fusion_aid_y = screen_height / 2.0 - 150.0; // Higher above cube center
+            let fusion_aid_size = 6.0; // Smaller for less distraction
+            let outline_thickness = 2.0; // Thin outline
             
-            // Add fusion aids - small circles at the top to help with alignment
-            let fusion_aid_y = 30.0;
-            let fusion_aid_size = 6.0;
-            
-            // Left fusion aid (in left half)
+            // Left fusion aid (center of left half)
             let left_aid_x = half_width / 2.0;
-            draw_circle(left_aid_x, fusion_aid_y, fusion_aid_size, RED);
-            draw_circle(left_aid_x, fusion_aid_y, fusion_aid_size - 2.0, WHITE);
+            draw_circle_lines(left_aid_x, fusion_aid_y, fusion_aid_size, outline_thickness, RED);
             
-            // Right fusion aid (in right half)
+            // Right fusion aid (center of right half)
             let right_aid_x = half_width + half_width / 2.0;
-            draw_circle(right_aid_x, fusion_aid_y, fusion_aid_size, RED);
-            draw_circle(right_aid_x, fusion_aid_y, fusion_aid_size - 2.0, WHITE);
-            
-            // Add corner markers for easier alignment
-            let corner_size = 4.0;
-            // Top corners of each view
-            draw_circle(5.0, 5.0, corner_size, GREEN);
-            draw_circle(half_width - 5.0, 5.0, corner_size, GREEN);
-            draw_circle(half_width + 5.0, 5.0, corner_size, GREEN);
-            draw_circle(screen_width - 5.0, 5.0, corner_size, GREEN);
+            draw_circle_lines(right_aid_x, fusion_aid_y, fusion_aid_size, outline_thickness, RED);
         }
     }
 }
@@ -188,124 +198,145 @@ async fn main() {
         // Draw UI overlay
         set_default_camera();
         
-        draw_text(
-            "iPhone Stereogram Viewer",
-            10.0,
-            30.0,
-            25.0,
-            WHITE
-        );
-        
-        draw_text(
-            "Left Eye | Right Eye",
-            10.0,
-            60.0,
-            20.0,
-            WHITE
-        );
-        
-        draw_text(
-            &format!("Rotation: {:.1}°", viewer.rotation.to_degrees()),
-            10.0,
-            90.0,
-            20.0,
-            WHITE
-        );
-        
-        // Show pause status
-        if viewer.is_paused {
+        if viewer.show_ui {
             draw_text(
-                "PAUSED",
+                "iPhone Stereogram Viewer",
                 10.0,
-                115.0,
+                30.0,
                 25.0,
-                RED
+                WHITE
+            );
+            
+            draw_text(
+                "Left Eye | Right Eye",
+                10.0,
+                60.0,
+                20.0,
+                WHITE
+            );
+            
+            draw_text(
+                &format!("Rotation: {:.1}°", viewer.rotation.to_degrees()),
+                10.0,
+                90.0,
+                20.0,
+                WHITE
+            );
+            
+            // Show pause status
+            if viewer.is_paused {
+                draw_text(
+                    "PAUSED",
+                    10.0,
+                    115.0,
+                    25.0,
+                    RED
+                );
+            }
+            
+            draw_text(
+                "Look \"through\" the image to see 3D effect!",
+                10.0,
+                120.0,
+                18.0,
+                YELLOW
+            );
+            
+            draw_text(
+                "Press SPACE to pause/resume animation",
+                10.0,
+                150.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Press G to toggle guides",
+                10.0,
+                175.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Press C to toggle depth coloring",
+                10.0,
+                200.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Press B to toggle background (black/white)",
+                10.0,
+                225.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Press T to toggle all text/UI",
+                10.0,
+                250.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Press LEFT/RIGHT to adjust eye separation",
+                10.0,
+                275.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Press UP/DOWN to adjust perspective (distance + scale)",
+                10.0,
+                300.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
+                "Fusion tips: Focus THROUGH screen, merge red circles",
+                10.0,
+                405.0,
+                18.0,
+                YELLOW
+            );
+            
+            // Show current eye separation value
+            draw_text(
+                &format!("Eye Separation: {:.3}", viewer.eye_separation),
+                10.0,
+                330.0,
+                18.0,
+                ORANGE
+            );
+            
+            // Show current perspective distance
+            draw_text(
+                &format!("Perspective Distance: {:.1}", viewer.perspective_distance),
+                10.0,
+                355.0,
+                18.0,
+                ORANGE
+            );
+            
+
+            
+
+            
+            // Draw distance indicator
+            draw_text(
+                &format!("Distance: {:.1} units", viewer.eye_separation * 2.0),
+                10.0,
+                400.0,
+                16.0,
+                ORANGE
             );
         }
-        
-        draw_text(
-            "Look \"through\" the image to see 3D effect!",
-            10.0,
-            120.0,
-            18.0,
-            YELLOW
-        );
-        
-        draw_text(
-            "Press SPACE to pause/resume animation",
-            10.0,
-            150.0,
-            18.0,
-            LIME
-        );
-        
-        draw_text(
-            "Press G to toggle guides",
-            10.0,
-            175.0,
-            18.0,
-            LIME
-        );
-        
-        draw_text(
-            "Press C to toggle depth coloring",
-            10.0,
-            200.0,
-            18.0,
-            LIME
-        );
-        
-        draw_text(
-            "Press LEFT/RIGHT to adjust eye separation",
-            10.0,
-            225.0,
-            18.0,
-            LIME
-        );
-        
-        draw_text(
-            "Fusion tips: Focus THROUGH screen, merge red circles",
-            10.0,
-            330.0,
-            18.0,
-            YELLOW
-        );
-        
-        // Show current eye separation value
-        draw_text(
-            &format!("Eye Separation: {:.3}", viewer.eye_separation),
-            10.0,
-            255.0,
-            18.0,
-            ORANGE
-        );
-        
-        // Visual representation of camera positions
-        let camera_visual_y = 295.0;
-        let screen_center = screen_width() / 2.0;
-        let visual_scale = 100.0; // Scale factor for visual representation
-        
-        // Draw center line
-        draw_line(screen_center, camera_visual_y - 20.0, screen_center, camera_visual_y + 20.0, 2.0, GRAY);
-        
-        // Draw left camera position
-        let left_cam_x = screen_center - (viewer.eye_separation * visual_scale);
-        draw_circle(left_cam_x, camera_visual_y, 8.0, RED);
-        draw_text("L", left_cam_x - 5.0, camera_visual_y + 5.0, 15.0, WHITE);
-        
-        // Draw right camera position
-        let right_cam_x = screen_center + (viewer.eye_separation * visual_scale);
-        draw_circle(right_cam_x, camera_visual_y, 8.0, BLUE);
-        draw_text("R", right_cam_x - 5.0, camera_visual_y + 5.0, 15.0, WHITE);
-        
-        // Draw distance indicator
-        draw_text(
-            &format!("Distance: {:.1} units", viewer.eye_separation * 2.0),
-            10.0,
-            325.0,
-            16.0,
-            ORANGE
-        );
         
         // Handle input
         if is_key_pressed(KeyCode::Space) {
@@ -323,12 +354,30 @@ async fn main() {
             viewer.depth_coloring = !viewer.depth_coloring;
         }
         
+        if is_key_pressed(KeyCode::T) {
+            // Toggle UI visibility
+            viewer.show_ui = !viewer.show_ui;
+        }
+        
+        if is_key_pressed(KeyCode::B) {
+            // Toggle background color
+            viewer.dark_background = !viewer.dark_background;
+        }
+        
         // Adjust eye separation for parallel viewing
         if is_key_pressed(KeyCode::Left) {
             viewer.eye_separation = (viewer.eye_separation - 0.01).max(0.05);
         }
         if is_key_pressed(KeyCode::Right) {
             viewer.eye_separation = (viewer.eye_separation + 0.01).min(0.3);
+        }
+        
+        // Adjust perspective distance and scale
+        if is_key_pressed(KeyCode::Up) {
+            viewer.perspective_distance = (viewer.perspective_distance + 0.5).min(20.0);
+        }
+        if is_key_pressed(KeyCode::Down) {
+            viewer.perspective_distance = (viewer.perspective_distance - 0.5).max(2.0);
         }
         
         next_frame().await;
