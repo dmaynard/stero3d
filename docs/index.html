@@ -6,32 +6,53 @@
     <title>Stereo3D - 3D Stereogram Cube Viewer</title>
     <style>
         html,
-        body,
-        canvas {
+        body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            position: absolute;
-            background: black;
-            z-index: 0;
-        }
-        
-        /* Improve font rendering for better typography */
-        body {
+            background: #1a1a1a;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             font-smooth: always;
         }
         
-        /* Ensure canvas has crisp rendering */
+        /* Container for the stereogram viewer */
+        .stereogram-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px; /* Optimal width for stereogram viewing */
+            height: 600px; /* Maintain aspect ratio */
+            background: black;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        
+        /* Canvas styling for the narrow viewing area */
         canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
             image-rendering: -webkit-optimize-contrast;
             image-rendering: -moz-crisp-edges;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
+        }
+        
+        /* Responsive design - adjust width on smaller screens */
+        @media (max-width: 500px) {
+            .stereogram-container {
+                width: 90vw;
+                height: 60vh;
+                max-width: 400px;
+                max-height: 600px;
+            }
         }
         
         /* Description overlay styles */
@@ -132,10 +153,33 @@
             opacity: 0;
             pointer-events: none;
         }
+        
+        /* Instructions overlay for optimal viewing */
+        .viewing-instructions {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            text-align: center;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
-    <canvas id="glcanvas" tabindex='1'></canvas>
+    <!-- Centered stereogram container -->
+    <div class="stereogram-container">
+        <div class="viewing-instructions">
+            Optimal width for 3D viewing
+        </div>
+        <canvas id="glcanvas" tabindex='1'></canvas>
+    </div>
     
     <!-- Description overlay -->
     <div class="description-overlay" id="descriptionOverlay">
@@ -196,6 +240,12 @@
                 <p>
                     The wireframe rendering includes depth-based coloring where closer wires appear brighter 
                     and farther wires appear darker, helping your brain understand the 3D structure.
+                </p>
+                
+                <p>
+                    <strong>Optimal Viewing:</strong><br>
+                    The app is designed with a narrow viewing area (400px width) that's optimal for stereogram fusion. 
+                    This width provides the perfect balance between image separation and ease of merging.
                 </p>
                 
                 <p>
