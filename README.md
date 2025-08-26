@@ -33,15 +33,18 @@ A stereogram creates a 3D illusion by presenting slightly different images to ea
 
 ## How to View the Stereogram
 
-1. **Position yourself** about 2-3 feet from the screen
+1. **Start close to the screen** (12-18 inches) for easier initial fusion
 2. **Relax your eyes** and look "through" the screen (like looking into the distance)
 3. **Focus on the red guide circles** at the top of each view
 4. **Let your eyes merge** the two images - you should see three cubes (left, right, and a floating 3D cube in the center)
 5. **Focus on the center cube** - this is your 3D stereogram!
+6. **Once fused, slowly move back** to 2-3 feet to maintain the 3D effect
 
 **Tips for easier fusion:**
 - Start with the default settings
 - Use the red guide circles as a target
+- Start close (12-18 inches) for easier initial fusion
+- Once fused, move back to 2-3 feet to maintain the effect
 - Adjust eye separation if needed (LEFT/RIGHT arrows)
 - Try different perspective distances (UP/DOWN arrows)
 - Practice with the pause feature (SPACE) to hold still images

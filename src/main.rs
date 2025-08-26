@@ -42,7 +42,10 @@ impl StereogramViewer {
             is_paused: false,
             show_guides: true,
             depth_coloring: true,
-            show_ui: true,
+            #[cfg(target_arch = "wasm32")]
+            show_ui: false, // Web users see HTML instructions, so hide UI by default
+            #[cfg(not(target_arch = "wasm32"))]
+            show_ui: true, // Native app users need UI visible by default
             dark_background: true,
         }
     }
