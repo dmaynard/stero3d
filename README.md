@@ -29,6 +29,7 @@ A stereogram creates a 3D illusion by presenting slightly different images to ea
 - **G** - Toggle fusion guides (red circles)
 - **C** - Toggle depth-based wireframe coloring
 - **B** - Toggle between black/white backgrounds
+- **O** - Toggle orthographic/perspective projection
 - **T** - Toggle all on-screen text and UI elements
 
 ## How to View the Stereogram
@@ -70,13 +71,20 @@ cargo run --release
 cargo build --release
 ```
 
+## Projection Modes
+
+The app supports two projection modes that can be toggled with the **O** key:
+
+- **Perspective (default)**: Traditional 3D view with realistic depth perspective where objects appear smaller as they get farther away
+- **Orthographic**: Parallel projection with no perspective distortion - can be easier to fuse and shows geometric relationships more clearly
+
 ## Technical Details
 
 - **Language**: Rust
 - **Graphics Engine**: Macroquad
-- **Rendering**: Manual 3D-to-2D projection for precise stereogram control
+- **Rendering**: Manual 3D-to-2D projection for precise stereogram control with both perspective and orthographic modes
 - **Window Size**: 393x852 pixels (iPhone 16 portrait dimensions)
-- **3D Math**: Custom rotation matrices and perspective projection
+- **3D Math**: Custom rotation matrices and configurable projection types
 - **Performance**: Optimized for smooth 60fps animation
 
 ## Project Structure

@@ -31,6 +31,7 @@ struct StereogramViewer {
     depth_coloring: bool,
     show_ui: bool,
     dark_background: bool,
+    orthographic: bool,
 }
 
 impl StereogramViewer {
@@ -47,6 +48,7 @@ impl StereogramViewer {
             #[cfg(not(target_arch = "wasm32"))]
             show_ui: true, // Native app users need UI visible by default
             dark_background: true,
+            orthographic: false, // Perspective projection is default
         }
     }
 
@@ -71,7 +73,14 @@ impl StereogramViewer {
         let screen_center_y = screen_height() / 2.0;
         // Adjust scale to maintain cube size as perspective changes
         let base_scale = 180.0;
-        let scale = base_scale * (self.perspective_distance / 4.0); // Scale proportionally with distance
+        let scale = if self.orthographic {
+            // For orthographic projection, match the effective scale of the front face in perspective mode
+            // In perspective, front face is at z = perspective_distance + 1.0, so effective scale is base_scale / z
+            let perspective_scale = base_scale * (self.perspective_distance / 4.0);
+            (perspective_scale / (self.perspective_distance + 1.0)) * 1.2 // Match front face size and increase by 20%
+        } else {
+            base_scale * (self.perspective_distance / 4.0) // Scale proportionally with distance for perspective
+        };
         let perspective_distance = self.perspective_distance; // Use adjustable perspective distance
 
         // Project each vertex to 2D screen coordinates
@@ -91,9 +100,18 @@ impl StereogramViewer {
                 rotated.z + perspective_distance
             );
             
-            // Simple perspective projection
-            let projected_x = screen_center_x + (camera_adjusted.x * scale) / camera_adjusted.z;
-            let projected_y = screen_center_y - (camera_adjusted.y * scale) / camera_adjusted.z;
+            // Choose projection type: perspective or orthographic
+            let (projected_x, projected_y) = if self.orthographic {
+                // Orthographic projection - no perspective distortion
+                let projected_x = screen_center_x + camera_adjusted.x * scale;
+                let projected_y = screen_center_y - camera_adjusted.y * scale;
+                (projected_x, projected_y)
+            } else {
+                // Perspective projection - traditional 3D perspective
+                let projected_x = screen_center_x + (camera_adjusted.x * scale) / camera_adjusted.z;
+                let projected_y = screen_center_y - (camera_adjusted.y * scale) / camera_adjusted.z;
+                (projected_x, projected_y)
+            };
             
             projected_vertices.push(Vec2::new(projected_x, projected_y));
         }
@@ -286,7 +304,7 @@ async fn main() {
             );
             
             draw_text(
-                "Press LEFT/RIGHT to adjust eye separation",
+                "Press O to toggle orthographic/perspective projection",
                 10.0,
                 275.0,
                 18.0,
@@ -294,7 +312,7 @@ async fn main() {
             );
             
             draw_text(
-                "Press UP/DOWN to adjust perspective (distance + scale)",
+                "Press LEFT/RIGHT to adjust eye separation",
                 10.0,
                 300.0,
                 18.0,
@@ -302,9 +320,17 @@ async fn main() {
             );
             
             draw_text(
+                "Press UP/DOWN to adjust perspective (distance + scale)",
+                10.0,
+                325.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
                 "Fusion tips: Focus THROUGH screen, merge red circles",
                 10.0,
-                405.0,
+                430.0,
                 18.0,
                 YELLOW
             );
@@ -313,7 +339,7 @@ async fn main() {
             draw_text(
                 &format!("Eye Separation: {:.3}", viewer.eye_separation),
                 10.0,
-                330.0,
+                350.0,
                 18.0,
                 ORANGE
             );
@@ -322,7 +348,16 @@ async fn main() {
             draw_text(
                 &format!("Perspective Distance: {:.1}", viewer.perspective_distance),
                 10.0,
-                355.0,
+                375.0,
+                18.0,
+                ORANGE
+            );
+            
+            // Show current projection mode
+            draw_text(
+                &format!("Projection: {}", if viewer.orthographic { "Orthographic" } else { "Perspective" }),
+                10.0,
+                400.0,
                 18.0,
                 ORANGE
             );
@@ -365,6 +400,11 @@ async fn main() {
         if is_key_pressed(KeyCode::B) {
             // Toggle background color
             viewer.dark_background = !viewer.dark_background;
+        }
+        
+        if is_key_pressed(KeyCode::O) {
+            // Toggle orthographic/perspective projection
+            viewer.orthographic = !viewer.orthographic;
         }
         
         // Adjust eye separation for parallel viewing
