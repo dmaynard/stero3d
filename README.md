@@ -1,20 +1,22 @@
-# Stereo3D - 3D Stereogram Cube Viewer
+# Stereo3D - 3D Stereogram Platonic Solids Viewer
 
-A real-time 3D stereogram viewer built with Rust and Macroquad that displays a rotating wireframe cube as a parallel stereogram for 3D viewing without special glasses.
+A real-time 3D stereogram viewer built with Rust and Macroquad that displays rotating wireframe Platonic solids as parallel stereograms for 3D viewing without special glasses.
 
 ## Features
 
-- **3D Stereogram Rendering**: View a rotating 3D cube in true 3D using parallel stereogram technique
+- **5 Platonic Solids**: Cycle through Tetrahedron, Cube, Octahedron, Dodecahedron, and Icosahedron
+- **3D Stereogram Rendering**: View rotating 3D solids in true 3D using parallel stereogram technique
+- **Dual Projection Modes**: Switch between perspective and orthographic projection
 - **Wireframe Display**: Clean wireframe rendering with depth-based coloring
 - **Real-time Animation**: Smooth rotation with pause/resume functionality
 - **Adjustable Viewing**: Fine-tune eye separation and perspective for optimal 3D fusion
 - **Visual Fusion Aids**: Red guide circles to help merge the two images
 - **Multiple Display Modes**: Toggle between dark/light backgrounds and depth coloring
-- **iPhone-Optimized**: Window dimensions optimized for iPhone 16 portrait mode
+- **Cross-Platform**: Native desktop app and web WASM version
 
 ## How It Works
 
-A stereogram creates a 3D illusion by presenting slightly different images to each eye. This app renders the same 3D cube from two camera positions (left and right eye), separated by a configurable distance. When viewed correctly, your brain merges these two images into a single 3D scene.
+A stereogram creates a 3D illusion by presenting slightly different images to each eye. This app renders the same 3D Platonic solid from two camera positions (left and right eye), separated by a configurable distance. When viewed correctly, your brain merges these two images into a single 3D scene.
 
 ## Controls
 
@@ -26,6 +28,7 @@ A stereogram creates a 3D illusion by presenting slightly different images to ea
 - **UP/DOWN Arrow** - Adjust perspective distance and cube scale (2.0 to 20.0)
 
 ### Display Options
+- **S** - Cycle through Platonic solids (Tetrahedron → Cube → Octahedron → Dodecahedron → Icosahedron)
 - **G** - Toggle fusion guides (red circles)
 - **C** - Toggle depth-based wireframe coloring
 - **B** - Toggle between black/white backgrounds
@@ -37,8 +40,8 @@ A stereogram creates a 3D illusion by presenting slightly different images to ea
 1. **Start close to the screen** (12-18 inches) for easier initial fusion
 2. **Relax your eyes** and look "through" the screen (like looking into the distance)
 3. **Focus on the red guide circles** at the top of each view
-4. **Let your eyes merge** the two images - you should see three cubes (left, right, and a floating 3D cube in the center)
-5. **Focus on the center cube** - this is your 3D stereogram!
+4. **Let your eyes merge** the two images - you should see three shapes (left, right, and a floating 3D shape in the center)
+5. **Focus on the center shape** - this is your 3D stereogram!
 6. **Once fused, slowly move back** to 2-3 feet to maintain the 3D effect
 
 **Tips for easier fusion:**
@@ -71,6 +74,18 @@ cargo run --release
 cargo build --release
 ```
 
+## Platonic Solids
+
+The app features all five Platonic solids, which can be cycled through with the **S** key:
+
+- **Tetrahedron**: 4 triangular faces, 4 vertices, 6 edges - the simplest 3D solid
+- **Cube**: 6 square faces, 8 vertices, 12 edges - the most familiar solid
+- **Octahedron**: 8 triangular faces, 6 vertices, 12 edges - dual of the cube
+- **Dodecahedron**: 12 pentagonal faces, 20 vertices, 30 edges - uses golden ratio proportions
+- **Icosahedron**: 20 triangular faces, 12 vertices, 30 edges - dual of the dodecahedron
+
+Each solid demonstrates different geometric relationships and provides unique stereogram viewing experiences.
+
 ## Projection Modes
 
 The app supports two projection modes that can be toggled with the **O** key:
@@ -83,8 +98,9 @@ The app supports two projection modes that can be toggled with the **O** key:
 - **Language**: Rust
 - **Graphics Engine**: Macroquad
 - **Rendering**: Manual 3D-to-2D projection for precise stereogram control with both perspective and orthographic modes
+- **Geometry**: All five Platonic solids with mathematically accurate vertices and edges
 - **Window Size**: 393x852 pixels (iPhone 16 portrait dimensions)
-- **3D Math**: Custom rotation matrices and configurable projection types
+- **3D Math**: Custom rotation matrices, configurable projection types, and golden ratio calculations
 - **Performance**: Optimized for smooth 60fps animation
 
 ## Project Structure

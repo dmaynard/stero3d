@@ -1,6 +1,49 @@
 use macroquad::prelude::*;
 
-// Cube vertex data (doubled in size)
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PlatonicSolid {
+    Tetrahedron = 0,
+    Cube = 1,
+    Octahedron = 2,
+    Dodecahedron = 3,
+    Icosahedron = 4,
+}
+
+impl PlatonicSolid {
+    fn next(self) -> Self {
+        match self {
+            PlatonicSolid::Tetrahedron => PlatonicSolid::Cube,
+            PlatonicSolid::Cube => PlatonicSolid::Octahedron,
+            PlatonicSolid::Octahedron => PlatonicSolid::Dodecahedron,
+            PlatonicSolid::Dodecahedron => PlatonicSolid::Icosahedron,
+            PlatonicSolid::Icosahedron => PlatonicSolid::Tetrahedron,
+        }
+    }
+    
+    fn name(self) -> &'static str {
+        match self {
+            PlatonicSolid::Tetrahedron => "Tetrahedron",
+            PlatonicSolid::Cube => "Cube",
+            PlatonicSolid::Octahedron => "Octahedron",
+            PlatonicSolid::Dodecahedron => "Dodecahedron",
+            PlatonicSolid::Icosahedron => "Icosahedron",
+        }
+    }
+}
+
+// Tetrahedron vertices (4 vertices, 6 edges)
+const TETRAHEDRON_VERTICES: [Vec3; 4] = [
+    Vec3::new(1.0, 1.0, 1.0),
+    Vec3::new(-1.0, -1.0, 1.0),
+    Vec3::new(-1.0, 1.0, -1.0),
+    Vec3::new(1.0, -1.0, -1.0),
+];
+
+const TETRAHEDRON_EDGES: [(usize, usize); 6] = [
+    (0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3),
+];
+
+// Cube vertex data (8 vertices, 12 edges)
 const CUBE_VERTICES: [Vec3; 8] = [
     Vec3::new(-1.0, -1.0, -1.0), // 0: bottom-left-back
     Vec3::new(1.0, -1.0, -1.0),  // 1: bottom-right-back
@@ -12,7 +55,6 @@ const CUBE_VERTICES: [Vec3; 8] = [
     Vec3::new(-1.0, 1.0, 1.0),   // 7: top-left-front
 ];
 
-// Cube edges (pairs of vertex indices)
 const CUBE_EDGES: [(usize, usize); 12] = [
     // Back face edges
     (0, 1), (1, 2), (2, 3), (3, 0),
@@ -20,6 +62,60 @@ const CUBE_EDGES: [(usize, usize); 12] = [
     (4, 5), (5, 6), (6, 7), (7, 4),
     // Connecting edges
     (0, 4), (1, 5), (2, 6), (3, 7),
+];
+
+// Octahedron vertices (6 vertices, 12 edges) - scaled to match cube size
+const OCTAHEDRON_VERTICES: [Vec3; 6] = [
+    Vec3::new(1.4, 0.0, 0.0),   // +X (scaled by 1.4)
+    Vec3::new(-1.4, 0.0, 0.0),  // -X
+    Vec3::new(0.0, 1.4, 0.0),   // +Y
+    Vec3::new(0.0, -1.4, 0.0),  // -Y
+    Vec3::new(0.0, 0.0, 1.4),   // +Z
+    Vec3::new(0.0, 0.0, -1.4),  // -Z
+];
+
+const OCTAHEDRON_EDGES: [(usize, usize); 12] = [
+    (0, 2), (0, 3), (0, 4), (0, 5), // +X to all others
+    (1, 2), (1, 3), (1, 4), (1, 5), // -X to all others
+    (2, 4), (2, 5), (3, 4), (3, 5), // Y to Z connections
+];
+
+// Dodecahedron vertices (20 vertices, 30 edges) - using golden ratio
+const PHI: f32 = 1.618034; // Golden ratio
+const INV_PHI: f32 = 0.618034; // 1/phi
+
+const DODECAHEDRON_VERTICES: [Vec3; 20] = [
+    // Cube vertices
+    Vec3::new(1.0, 1.0, 1.0), Vec3::new(1.0, 1.0, -1.0), Vec3::new(1.0, -1.0, 1.0), Vec3::new(1.0, -1.0, -1.0),
+    Vec3::new(-1.0, 1.0, 1.0), Vec3::new(-1.0, 1.0, -1.0), Vec3::new(-1.0, -1.0, 1.0), Vec3::new(-1.0, -1.0, -1.0),
+    // Golden ratio rectangles in YZ plane
+    Vec3::new(0.0, PHI, INV_PHI), Vec3::new(0.0, PHI, -INV_PHI), Vec3::new(0.0, -PHI, INV_PHI), Vec3::new(0.0, -PHI, -INV_PHI),
+    // Golden ratio rectangles in XZ plane
+    Vec3::new(INV_PHI, 0.0, PHI), Vec3::new(-INV_PHI, 0.0, PHI), Vec3::new(INV_PHI, 0.0, -PHI), Vec3::new(-INV_PHI, 0.0, -PHI),
+    // Golden ratio rectangles in XY plane
+    Vec3::new(PHI, INV_PHI, 0.0), Vec3::new(PHI, -INV_PHI, 0.0), Vec3::new(-PHI, INV_PHI, 0.0), Vec3::new(-PHI, -INV_PHI, 0.0),
+];
+
+const DODECAHEDRON_EDGES: [(usize, usize); 30] = [
+    // This is a simplified edge set for wireframe display
+    (0, 8), (0, 12), (0, 16), (1, 9), (1, 14), (1, 16), (2, 10), (2, 12), (2, 17),
+    (3, 11), (3, 14), (3, 17), (4, 8), (4, 13), (4, 18), (5, 9), (5, 15), (5, 18),
+    (6, 10), (6, 13), (6, 19), (7, 11), (7, 15), (7, 19), (8, 9), (10, 11), (12, 13),
+    (14, 15), (16, 17), (18, 19),
+];
+
+// Icosahedron vertices (12 vertices, 30 edges) - using golden ratio
+const ICOSAHEDRON_VERTICES: [Vec3; 12] = [
+    // Golden ratio rectangles in different planes
+    Vec3::new(0.0, INV_PHI, PHI), Vec3::new(0.0, INV_PHI, -PHI), Vec3::new(0.0, -INV_PHI, PHI), Vec3::new(0.0, -INV_PHI, -PHI),
+    Vec3::new(INV_PHI, PHI, 0.0), Vec3::new(INV_PHI, -PHI, 0.0), Vec3::new(-INV_PHI, PHI, 0.0), Vec3::new(-INV_PHI, -PHI, 0.0),
+    Vec3::new(PHI, 0.0, INV_PHI), Vec3::new(-PHI, 0.0, INV_PHI), Vec3::new(PHI, 0.0, -INV_PHI), Vec3::new(-PHI, 0.0, -INV_PHI),
+];
+
+const ICOSAHEDRON_EDGES: [(usize, usize); 30] = [
+    (0, 2), (0, 4), (0, 6), (0, 8), (0, 9), (1, 3), (1, 4), (1, 6), (1, 10), (1, 11),
+    (2, 5), (2, 7), (2, 8), (2, 9), (3, 5), (3, 7), (3, 10), (3, 11), (4, 6), (4, 8),
+    (4, 10), (5, 7), (5, 8), (5, 10), (6, 9), (6, 11), (7, 9), (7, 11), (8, 10), (9, 11),
 ];
 
 struct StereogramViewer {
@@ -32,6 +128,7 @@ struct StereogramViewer {
     show_ui: bool,
     dark_background: bool,
     orthographic: bool,
+    current_solid: PlatonicSolid,
 }
 
 impl StereogramViewer {
@@ -49,6 +146,7 @@ impl StereogramViewer {
             show_ui: true, // Native app users need UI visible by default
             dark_background: true,
             orthographic: false, // Perspective projection is default
+            current_solid: PlatonicSolid::Cube, // Default to cube
         }
     }
 
@@ -57,8 +155,28 @@ impl StereogramViewer {
             self.rotation += 0.01;
         }
     }
+    
+    fn get_vertices(&self) -> &[Vec3] {
+        match self.current_solid {
+            PlatonicSolid::Tetrahedron => &TETRAHEDRON_VERTICES,
+            PlatonicSolid::Cube => &CUBE_VERTICES,
+            PlatonicSolid::Octahedron => &OCTAHEDRON_VERTICES,
+            PlatonicSolid::Dodecahedron => &DODECAHEDRON_VERTICES,
+            PlatonicSolid::Icosahedron => &ICOSAHEDRON_VERTICES,
+        }
+    }
+    
+    fn get_edges(&self) -> &[(usize, usize)] {
+        match self.current_solid {
+            PlatonicSolid::Tetrahedron => &TETRAHEDRON_EDGES,
+            PlatonicSolid::Cube => &CUBE_EDGES,
+            PlatonicSolid::Octahedron => &OCTAHEDRON_EDGES,
+            PlatonicSolid::Dodecahedron => &DODECAHEDRON_EDGES,
+            PlatonicSolid::Icosahedron => &ICOSAHEDRON_EDGES,
+        }
+    }
 
-    fn draw_cube_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
+    fn draw_solid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
         // Apply rotation to vertices first
         let rotation_y = self.rotation;
         let rotation_x = self.rotation * 0.5;
@@ -87,7 +205,8 @@ impl StereogramViewer {
         let mut projected_vertices = Vec::new();
         let mut transformed_vertices = Vec::new();
         
-        for &vertex in &CUBE_VERTICES {
+        let vertices = self.get_vertices();
+        for &vertex in vertices {
             // Apply rotation
             let vec4 = combined_rotation * Vec4::new(vertex.x, vertex.y, vertex.z, 1.0);
             let rotated = Vec3::new(vec4.x, vec4.y, vec4.z);
@@ -117,7 +236,8 @@ impl StereogramViewer {
         }
 
         // Draw wireframe edges using 2D lines with optional depth-based coloring
-        for &(start_idx, end_idx) in &CUBE_EDGES {
+        let edges = self.get_edges();
+        for &(start_idx, end_idx) in edges {
             let start_2d = projected_vertices[start_idx];
             let end_2d = projected_vertices[end_idx];
             
@@ -174,10 +294,10 @@ impl StereogramViewer {
         set_default_camera();
         
         // Render left eye view (left half of screen)
-        self.draw_cube_wireframe(-self.eye_separation, 0.0);
+        self.draw_solid_wireframe(-self.eye_separation, 0.0);
         
         // Render right eye view (right half of screen)  
-        self.draw_cube_wireframe(self.eye_separation, half_width);
+        self.draw_solid_wireframe(self.eye_separation, half_width);
         
         // Draw guides only if show_guides is true
         if self.show_guides {
@@ -221,7 +341,7 @@ async fn main() {
         
         if viewer.show_ui {
             draw_text(
-                "iPhone Stereogram Viewer",
+                "3D Platonic Solids Stereogram Viewer",
                 10.0,
                 30.0,
                 25.0,
@@ -312,7 +432,7 @@ async fn main() {
             );
             
             draw_text(
-                "Press LEFT/RIGHT to adjust eye separation",
+                "Press S to cycle through Platonic solids",
                 10.0,
                 300.0,
                 18.0,
@@ -320,7 +440,7 @@ async fn main() {
             );
             
             draw_text(
-                "Press UP/DOWN to adjust perspective (distance + scale)",
+                "Press LEFT/RIGHT to adjust eye separation",
                 10.0,
                 325.0,
                 18.0,
@@ -328,9 +448,17 @@ async fn main() {
             );
             
             draw_text(
+                "Press UP/DOWN to adjust perspective (distance + scale)",
+                10.0,
+                350.0,
+                18.0,
+                LIME
+            );
+            
+            draw_text(
                 "Fusion tips: Focus THROUGH screen, merge red circles",
                 10.0,
-                430.0,
+                480.0,
                 18.0,
                 YELLOW
             );
@@ -339,7 +467,7 @@ async fn main() {
             draw_text(
                 &format!("Eye Separation: {:.3}", viewer.eye_separation),
                 10.0,
-                350.0,
+                375.0,
                 18.0,
                 ORANGE
             );
@@ -348,7 +476,7 @@ async fn main() {
             draw_text(
                 &format!("Perspective Distance: {:.1}", viewer.perspective_distance),
                 10.0,
-                375.0,
+                400.0,
                 18.0,
                 ORANGE
             );
@@ -357,7 +485,16 @@ async fn main() {
             draw_text(
                 &format!("Projection: {}", if viewer.orthographic { "Orthographic" } else { "Perspective" }),
                 10.0,
-                400.0,
+                425.0,
+                18.0,
+                ORANGE
+            );
+            
+            // Show current solid
+            draw_text(
+                &format!("Solid: {}", viewer.current_solid.name()),
+                10.0,
+                450.0,
                 18.0,
                 ORANGE
             );
@@ -405,6 +542,11 @@ async fn main() {
         if is_key_pressed(KeyCode::O) {
             // Toggle orthographic/perspective projection
             viewer.orthographic = !viewer.orthographic;
+        }
+        
+        if is_key_pressed(KeyCode::S) {
+            // Cycle through Platonic solids
+            viewer.current_solid = viewer.current_solid.next();
         }
         
         // Adjust eye separation for parallel viewing
