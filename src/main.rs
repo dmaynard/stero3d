@@ -144,7 +144,7 @@ impl StereogramViewer {
             show_ui: false, // Web users see HTML instructions, so hide UI by default
             #[cfg(not(target_arch = "wasm32"))]
             show_ui: true, // Native app users need UI visible by default
-            dark_background: true,
+            dark_background: false, // Default to white background
             orthographic: false, // Perspective projection is default
             current_solid: PlatonicSolid::Cube, // Default to cube
         }
