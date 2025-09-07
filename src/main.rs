@@ -339,13 +339,46 @@ async fn main() {
         // Draw UI overlay
         set_default_camera();
         
+        // Draw help button (always visible)
+        let button_x = 10.0;
+        let button_y = 10.0;
+        let button_size = 30.0;
+        
+        // Button background
+        draw_rectangle(
+            button_x,
+            button_y,
+            button_size,
+            button_size,
+            if viewer.dark_background { Color::new(0.2, 0.2, 0.2, 0.8) } else { Color::new(0.9, 0.9, 0.9, 0.8) }
+        );
+        
+        // Button border
+        draw_rectangle_lines(
+            button_x,
+            button_y,
+            button_size,
+            button_size,
+            2.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
+        
+        // Button text "?"
+        draw_text(
+            "?",
+            button_x + 8.0,
+            button_y + 22.0,
+            20.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
+        
         if viewer.show_ui {
             draw_text(
                 "3D Platonic Solids Stereogram Viewer",
-                10.0,
+                50.0,
                 30.0,
                 25.0,
-                WHITE
+                if viewer.dark_background { WHITE } else { BLACK }
             );
             
             draw_text(
@@ -353,7 +386,7 @@ async fn main() {
                 10.0,
                 60.0,
                 20.0,
-                WHITE
+                if viewer.dark_background { WHITE } else { BLACK }
             );
             
             draw_text(
@@ -361,7 +394,7 @@ async fn main() {
                 10.0,
                 90.0,
                 20.0,
-                WHITE
+                if viewer.dark_background { WHITE } else { BLACK }
             );
             
             // Show pause status
@@ -380,7 +413,7 @@ async fn main() {
                 10.0,
                 120.0,
                 18.0,
-                YELLOW
+                if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) } // Dark yellow for white background
             );
             
             draw_text(
@@ -388,7 +421,7 @@ async fn main() {
                 10.0,
                 150.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) } // Dark green for white background
             );
             
             draw_text(
@@ -396,7 +429,7 @@ async fn main() {
                 10.0,
                 175.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -404,7 +437,7 @@ async fn main() {
                 10.0,
                 200.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -412,7 +445,7 @@ async fn main() {
                 10.0,
                 225.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -420,7 +453,7 @@ async fn main() {
                 10.0,
                 250.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -428,7 +461,7 @@ async fn main() {
                 10.0,
                 275.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -436,7 +469,7 @@ async fn main() {
                 10.0,
                 300.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -444,7 +477,7 @@ async fn main() {
                 10.0,
                 325.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -452,7 +485,7 @@ async fn main() {
                 10.0,
                 350.0,
                 18.0,
-                LIME
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
             
             draw_text(
@@ -460,7 +493,7 @@ async fn main() {
                 10.0,
                 480.0,
                 18.0,
-                YELLOW
+                if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) }
             );
             
             // Show current eye separation value
@@ -469,7 +502,7 @@ async fn main() {
                 10.0,
                 375.0,
                 18.0,
-                ORANGE
+                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) } // Dark orange for white background
             );
             
             // Show current perspective distance
@@ -478,7 +511,7 @@ async fn main() {
                 10.0,
                 400.0,
                 18.0,
-                ORANGE
+                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) }
             );
             
             // Show current projection mode
@@ -487,7 +520,7 @@ async fn main() {
                 10.0,
                 425.0,
                 18.0,
-                ORANGE
+                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) }
             );
             
             // Show current solid
@@ -496,7 +529,7 @@ async fn main() {
                 10.0,
                 450.0,
                 18.0,
-                ORANGE
+                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) }
             );
             
 
@@ -547,6 +580,19 @@ async fn main() {
         if is_key_pressed(KeyCode::S) {
             // Cycle through Platonic solids
             viewer.current_solid = viewer.current_solid.next();
+        }
+        
+        // Handle help button click
+        if is_mouse_button_pressed(MouseButton::Left) {
+            let mouse_pos = mouse_position();
+            let button_x = 10.0;
+            let button_y = 10.0;
+            let button_size = 30.0;
+            
+            if mouse_pos.0 >= button_x && mouse_pos.0 <= button_x + button_size &&
+               mouse_pos.1 >= button_y && mouse_pos.1 <= button_y + button_size {
+                viewer.show_ui = !viewer.show_ui;
+            }
         }
         
         // Adjust eye separation for parallel viewing
