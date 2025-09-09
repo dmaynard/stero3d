@@ -119,7 +119,12 @@ const ICOSAHEDRON_EDGES: [(usize, usize); 30] = [
 ];
 
 struct StereogramViewer {
-    rotation: f32,
+    rotation_x: f32,
+    rotation_y: f32,
+    rotation_z: f32,
+    rotation_velocity_x: f32,
+    rotation_velocity_y: f32,
+    rotation_velocity_z: f32,
     eye_separation: f32,
     perspective_distance: f32,
     is_paused: bool,
@@ -129,12 +134,19 @@ struct StereogramViewer {
     dark_background: bool,
     orthographic: bool,
     current_solid: PlatonicSolid,
+    show_3d_controls: bool,
+    dragging_slider: Option<usize>, // None, Some(0) for X, Some(1) for Y, Some(2) for Z
 }
 
 impl StereogramViewer {
     fn new() -> Self {
         Self {
-            rotation: 0.0,
+            rotation_x: 0.0,
+            rotation_y: 0.0,
+            rotation_z: 0.0,
+            rotation_velocity_x: 0.005, // Slower X rotation
+            rotation_velocity_y: 0.01,  // Normal Y rotation
+            rotation_velocity_z: 0.003, // Slower Z rotation
             eye_separation: 0.06, // Reduced for iPhone dimensions
             perspective_distance: 10.0, // Initial perspective distance
             is_paused: false,
@@ -147,12 +159,16 @@ impl StereogramViewer {
             dark_background: false, // Default to white background
             orthographic: false, // Perspective projection is default
             current_solid: PlatonicSolid::Cube, // Default to cube
+            show_3d_controls: false, // Default to off
+            dragging_slider: None, // No slider being dragged initially
         }
     }
 
     fn update(&mut self) {
         if !self.is_paused {
-            self.rotation += 0.01;
+            self.rotation_x += self.rotation_velocity_x;
+            self.rotation_y += self.rotation_velocity_y;
+            self.rotation_z += self.rotation_velocity_z;
         }
     }
     
@@ -178,13 +194,13 @@ impl StereogramViewer {
 
     fn draw_solid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
         // Apply rotation to vertices first
-        let rotation_y = self.rotation;
-        let rotation_x = self.rotation * 0.5;
-
-        // Create rotation matrices
-        let rot_y_matrix = Mat4::from_rotation_y(rotation_y);
-        let rot_x_matrix = Mat4::from_rotation_x(rotation_x);
-        let combined_rotation = rot_y_matrix * rot_x_matrix;
+        // Create rotation matrices for each axis
+        let rot_x_matrix = Mat4::from_rotation_x(self.rotation_x);
+        let rot_y_matrix = Mat4::from_rotation_y(self.rotation_y);
+        let rot_z_matrix = Mat4::from_rotation_z(self.rotation_z);
+        
+        // Combine rotations: Z * Y * X (order matters for 3D rotation)
+        let combined_rotation = rot_z_matrix * rot_y_matrix * rot_x_matrix;
 
         // Transform and project vertices to 2D screen space manually
         let screen_center_x = screen_width() / 4.0 + screen_offset_x; // Quarter width + offset for each view
@@ -340,37 +356,329 @@ async fn main() {
         set_default_camera();
         
         // Draw help button (always visible)
-        let button_x = 10.0;
-        let button_y = 10.0;
+        let help_button_x = 10.0;
+        let help_button_y = 10.0;
         let button_size = 30.0;
         
-        // Button background
+        // Help button background
         draw_rectangle(
-            button_x,
-            button_y,
+            help_button_x,
+            help_button_y,
             button_size,
             button_size,
             if viewer.dark_background { Color::new(0.2, 0.2, 0.2, 0.8) } else { Color::new(0.9, 0.9, 0.9, 0.8) }
         );
         
-        // Button border
+        // Help button border
         draw_rectangle_lines(
-            button_x,
-            button_y,
+            help_button_x,
+            help_button_y,
             button_size,
             button_size,
             2.0,
             if viewer.dark_background { WHITE } else { BLACK }
         );
         
-        // Button text "?"
+        // Help button text "?"
         draw_text(
             "?",
-            button_x + 8.0,
-            button_y + 22.0,
+            help_button_x + 8.0,
+            help_button_y + 22.0,
             20.0,
             if viewer.dark_background { WHITE } else { BLACK }
         );
+        
+        // Draw 3D controls button (always visible)
+        let controls_button_x = 50.0;
+        let controls_button_y = 10.0;
+        
+        // 3D controls button background
+        draw_rectangle(
+            controls_button_x,
+            controls_button_y,
+            button_size,
+            button_size,
+            if viewer.show_3d_controls {
+                if viewer.dark_background { Color::new(0.3, 0.5, 0.3, 0.8) } else { Color::new(0.7, 0.9, 0.7, 0.8) }
+            } else {
+                if viewer.dark_background { Color::new(0.2, 0.2, 0.2, 0.8) } else { Color::new(0.9, 0.9, 0.9, 0.8) }
+            }
+        );
+        
+        // 3D controls button border
+        draw_rectangle_lines(
+            controls_button_x,
+            controls_button_y,
+            button_size,
+            button_size,
+            2.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
+        
+        // 3D controls button text "3D"
+        draw_text(
+            "3D",
+            controls_button_x + 4.0,
+            controls_button_y + 22.0,
+            16.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
+        
+        // Draw 3D controls panel
+        if viewer.show_3d_controls {
+            let panel_x = 10.0;
+            let panel_y = 50.0;
+            let panel_width = 300.0;
+            let panel_height = 200.0;
+            
+            // Panel background
+            draw_rectangle(
+                panel_x,
+                panel_y,
+                panel_width,
+                panel_height,
+                if viewer.dark_background { Color::new(0.1, 0.1, 0.1, 0.9) } else { Color::new(0.95, 0.95, 0.95, 0.9) }
+            );
+            
+            // Panel border
+            draw_rectangle_lines(
+                panel_x,
+                panel_y,
+                panel_width,
+                panel_height,
+                2.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Panel title
+            draw_text(
+                "3D Rotation Controls",
+                panel_x + 10.0,
+                panel_y + 25.0,
+                20.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Rotation angles display
+            draw_text(
+                &format!("X: {:.1}°", viewer.rotation_x.to_degrees()),
+                panel_x + 20.0,
+                panel_y + 50.0,
+                16.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                &format!("Y: {:.1}°", viewer.rotation_y.to_degrees()),
+                panel_x + 20.0,
+                panel_y + 70.0,
+                16.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                &format!("Z: {:.1}°", viewer.rotation_z.to_degrees()),
+                panel_x + 20.0,
+                panel_y + 90.0,
+                16.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Velocity sliders
+            let slider_x = panel_x + 20.0;
+            let slider_y = panel_y + 110.0;
+            let slider_width = 200.0;
+            let slider_height = 20.0;
+            let slider_spacing = 30.0;
+            
+            // X velocity slider
+            draw_text(
+                "X Vel:",
+                slider_x,
+                slider_y - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (-, 0, +)
+            draw_text(
+                "-",
+                slider_x - 10.0,
+                slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "0",
+                slider_x + slider_width / 2.0 - 3.0,
+                slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "+",
+                slider_x + slider_width + 5.0,
+                slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider track
+            draw_rectangle(
+                slider_x,
+                slider_y,
+                slider_width,
+                slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Center line on slider
+            draw_line(
+                slider_x + slider_width / 2.0,
+                slider_y,
+                slider_x + slider_width / 2.0,
+                slider_y + slider_height,
+                1.0,
+                if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+            );
+            
+            // Slider handle
+            let x_handle_x = slider_x + (viewer.rotation_velocity_x + 0.05) / 0.10 * slider_width;
+            draw_rectangle(
+                x_handle_x - 5.0,
+                slider_y + 2.0,
+                10.0,
+                slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Y velocity slider
+            draw_text(
+                "Y Vel:",
+                slider_x,
+                slider_y + slider_spacing - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (-, 0, +)
+            draw_text(
+                "-",
+                slider_x - 10.0,
+                slider_y + slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "0",
+                slider_x + slider_width / 2.0 - 3.0,
+                slider_y + slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "+",
+                slider_x + slider_width + 5.0,
+                slider_y + slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                slider_x,
+                slider_y + slider_spacing,
+                slider_width,
+                slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Center line on slider
+            draw_line(
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing,
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing + slider_height,
+                1.0,
+                if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+            );
+            
+            let y_handle_x = slider_x + (viewer.rotation_velocity_y + 0.05) / 0.10 * slider_width;
+            draw_rectangle(
+                y_handle_x - 5.0,
+                slider_y + slider_spacing + 2.0,
+                10.0,
+                slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Z velocity slider
+            draw_text(
+                "Z Vel:",
+                slider_x,
+                slider_y + slider_spacing * 2.0 - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (-, 0, +)
+            draw_text(
+                "-",
+                slider_x - 10.0,
+                slider_y + slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "0",
+                slider_x + slider_width / 2.0 - 3.0,
+                slider_y + slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "+",
+                slider_x + slider_width + 5.0,
+                slider_y + slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                slider_x,
+                slider_y + slider_spacing * 2.0,
+                slider_width,
+                slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Center line on slider
+            draw_line(
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing * 2.0,
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing * 2.0 + slider_height,
+                1.0,
+                if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+            );
+            
+            let z_handle_x = slider_x + (viewer.rotation_velocity_z + 0.05) / 0.10 * slider_width;
+            draw_rectangle(
+                z_handle_x - 5.0,
+                slider_y + slider_spacing * 2.0 + 2.0,
+                10.0,
+                slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Instructions
+            draw_text(
+                "Click and drag sliders to adjust rotation speed",
+                panel_x + 10.0,
+                panel_y + 180.0,
+                12.0,
+                if viewer.dark_background { Color::new(0.7, 0.7, 0.7, 1.0) } else { Color::new(0.4, 0.4, 0.4, 1.0) }
+            );
+        }
         
         if viewer.show_ui {
             draw_text(
@@ -390,10 +698,26 @@ async fn main() {
             );
             
             draw_text(
-                &format!("Rotation: {:.1}°", viewer.rotation.to_degrees()),
+                &format!("Rotation X: {:.1}°", viewer.rotation_x.to_degrees()),
                 10.0,
                 90.0,
-                20.0,
+                18.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                &format!("Rotation Y: {:.1}°", viewer.rotation_y.to_degrees()),
+                10.0,
+                110.0,
+                18.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                &format!("Rotation Z: {:.1}°", viewer.rotation_z.to_degrees()),
+                10.0,
+                130.0,
+                18.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
@@ -402,7 +726,7 @@ async fn main() {
                 draw_text(
                     "PAUSED",
                     10.0,
-                    115.0,
+                    155.0,
                     25.0,
                     RED
                 );
@@ -411,7 +735,7 @@ async fn main() {
             draw_text(
                 "Look \"through\" the image to see 3D effect!",
                 10.0,
-                120.0,
+                180.0,
                 18.0,
                 if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) } // Dark yellow for white background
             );
@@ -419,7 +743,7 @@ async fn main() {
             draw_text(
                 "Press SPACE to pause/resume animation",
                 10.0,
-                150.0,
+                210.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) } // Dark green for white background
             );
@@ -427,7 +751,7 @@ async fn main() {
             draw_text(
                 "Press G to toggle guides",
                 10.0,
-                175.0,
+                235.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -435,7 +759,7 @@ async fn main() {
             draw_text(
                 "Press C to toggle depth coloring",
                 10.0,
-                200.0,
+                260.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -443,7 +767,7 @@ async fn main() {
             draw_text(
                 "Press B to toggle background (black/white)",
                 10.0,
-                225.0,
+                285.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -451,7 +775,7 @@ async fn main() {
             draw_text(
                 "Press T to toggle all text/UI",
                 10.0,
-                250.0,
+                310.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -459,7 +783,7 @@ async fn main() {
             draw_text(
                 "Press O to toggle orthographic/perspective projection",
                 10.0,
-                275.0,
+                335.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -467,7 +791,7 @@ async fn main() {
             draw_text(
                 "Press S to cycle through Platonic solids",
                 10.0,
-                300.0,
+                360.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -475,7 +799,7 @@ async fn main() {
             draw_text(
                 "Press LEFT/RIGHT to adjust eye separation",
                 10.0,
-                325.0,
+                385.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -483,7 +807,7 @@ async fn main() {
             draw_text(
                 "Press UP/DOWN to adjust perspective (distance + scale)",
                 10.0,
-                350.0,
+                410.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -582,16 +906,83 @@ async fn main() {
             viewer.current_solid = viewer.current_solid.next();
         }
         
-        // Handle help button click
+        // Handle button clicks
         if is_mouse_button_pressed(MouseButton::Left) {
             let mouse_pos = mouse_position();
-            let button_x = 10.0;
-            let button_y = 10.0;
+            
+            // Help button (upper left)
+            let help_button_x = 10.0;
+            let help_button_y = 10.0;
             let button_size = 30.0;
             
-            if mouse_pos.0 >= button_x && mouse_pos.0 <= button_x + button_size &&
-               mouse_pos.1 >= button_y && mouse_pos.1 <= button_y + button_size {
+            if mouse_pos.0 >= help_button_x && mouse_pos.0 <= help_button_x + button_size &&
+               mouse_pos.1 >= help_button_y && mouse_pos.1 <= help_button_y + button_size {
                 viewer.show_ui = !viewer.show_ui;
+            }
+            
+            // 3D controls button (next to help button)
+            let controls_button_x = 50.0;
+            let controls_button_y = 10.0;
+            
+            if mouse_pos.0 >= controls_button_x && mouse_pos.0 <= controls_button_x + button_size &&
+               mouse_pos.1 >= controls_button_y && mouse_pos.1 <= controls_button_y + button_size {
+                viewer.show_3d_controls = !viewer.show_3d_controls;
+            }
+            
+            // Handle slider interactions when 3D controls are visible
+            if viewer.show_3d_controls {
+                let panel_x = 10.0;
+                let panel_y = 50.0;
+                let slider_x = panel_x + 20.0;
+                let slider_y = panel_y + 110.0;
+                let slider_width = 200.0;
+                let slider_height = 20.0;
+                let slider_spacing = 30.0;
+                
+                // Check which slider was clicked
+                if mouse_pos.0 >= slider_x && mouse_pos.0 <= slider_x + slider_width {
+                    // X velocity slider
+                    if mouse_pos.1 >= slider_y && mouse_pos.1 <= slider_y + slider_height {
+                        viewer.dragging_slider = Some(0);
+                    }
+                    // Y velocity slider
+                    else if mouse_pos.1 >= slider_y + slider_spacing && mouse_pos.1 <= slider_y + slider_spacing + slider_height {
+                        viewer.dragging_slider = Some(1);
+                    }
+                    // Z velocity slider
+                    else if mouse_pos.1 >= slider_y + slider_spacing * 2.0 && mouse_pos.1 <= slider_y + slider_spacing * 2.0 + slider_height {
+                        viewer.dragging_slider = Some(2);
+                    }
+                }
+            }
+        }
+        
+        // Handle mouse release (stop dragging)
+        if is_mouse_button_released(MouseButton::Left) {
+            viewer.dragging_slider = None;
+        }
+        
+        // Handle slider dragging
+        if let Some(slider_index) = viewer.dragging_slider {
+            let mouse_pos = mouse_position();
+            let panel_x = 10.0;
+            let slider_x = panel_x + 20.0;
+            let slider_width = 200.0;
+            
+            let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
+            // Increased range: -0.05 to 0.05 with discrete steps
+            let raw_velocity = (normalized * 0.10) - 0.05; // Range: -0.05 to 0.05
+            
+            // Create discrete steps: -0.05, -0.045, -0.04, ..., 0.00, ..., 0.04, 0.045, 0.05
+            let step_size = 0.005;
+            let velocity = (raw_velocity / step_size).round() * step_size;
+            let velocity = velocity.clamp(-0.05, 0.05);
+            
+            match slider_index {
+                0 => viewer.rotation_velocity_x = velocity,
+                1 => viewer.rotation_velocity_y = velocity,
+                2 => viewer.rotation_velocity_z = velocity,
+                _ => {}
             }
         }
         
