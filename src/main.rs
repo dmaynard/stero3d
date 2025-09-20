@@ -136,6 +136,7 @@ struct StereogramViewer {
     current_solid: PlatonicSolid,
     show_3d_controls: bool,
     dragging_slider: Option<usize>, // None, Some(0) for X, Some(1) for Y, Some(2) for Z
+    dragging_angle_slider: Option<usize>, // None, Some(0) for X angle, Some(1) for Y angle, Some(2) for Z angle
 }
 
 impl StereogramViewer {
@@ -161,6 +162,7 @@ impl StereogramViewer {
             current_solid: PlatonicSolid::Cube, // Default to cube
             show_3d_controls: false, // Default to off
             dragging_slider: None, // No slider being dragged initially
+            dragging_angle_slider: None, // No angle slider being dragged initially
         }
     }
 
@@ -429,7 +431,7 @@ async fn main() {
             let panel_x = 10.0;
             let panel_y = 50.0;
             let panel_width = 300.0;
-            let panel_height = 200.0;
+            let panel_height = 340.0;
             
             // Panel background
             draw_rectangle(
@@ -459,41 +461,178 @@ async fn main() {
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
-            // Rotation angles display
+            // Rotation angle sliders (0-360 degrees)
+            let angle_slider_x = panel_x + 20.0;
+            let angle_slider_y = panel_y + 50.0;
+            let angle_slider_width = 200.0;
+            let angle_slider_height = 20.0;
+            let angle_slider_spacing = 35.0;
+            
+            // X angle slider
             draw_text(
-                &format!("X: {:.1}°", viewer.rotation_x.to_degrees()),
-                panel_x + 20.0,
-                panel_y + 50.0,
-                16.0,
+                "X:",
+                angle_slider_x,
+                angle_slider_y - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (0, 180, 360)
+            draw_text(
+                "0°",
+                angle_slider_x - 15.0,
+                angle_slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "180°",
+                angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                angle_slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "360°",
+                angle_slider_x + angle_slider_width + 5.0,
+                angle_slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // X angle slider track
+            draw_rectangle(
+                angle_slider_x,
+                angle_slider_y,
+                angle_slider_width,
+                angle_slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // X angle slider handle (normalize to 0-360 degrees)
+            let x_degrees = viewer.rotation_x.to_degrees() % 360.0;
+            let x_normalized = if x_degrees < 0.0 { x_degrees + 360.0 } else { x_degrees };
+            let x_angle_handle_x = angle_slider_x + (x_normalized / 360.0) * angle_slider_width;
+            draw_rectangle(
+                x_angle_handle_x - 5.0,
+                angle_slider_y + 2.0,
+                10.0,
+                angle_slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Y angle slider
+            draw_text(
+                "Y:",
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing - 5.0,
+                14.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
             draw_text(
-                &format!("Y: {:.1}°", viewer.rotation_y.to_degrees()),
-                panel_x + 20.0,
-                panel_y + 70.0,
-                16.0,
+                "0°",
+                angle_slider_x - 15.0,
+                angle_slider_y + angle_slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "180°",
+                angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                angle_slider_y + angle_slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "360°",
+                angle_slider_x + angle_slider_width + 5.0,
+                angle_slider_y + angle_slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing,
+                angle_slider_width,
+                angle_slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Y angle slider handle (normalize to 0-360 degrees)
+            let y_degrees = viewer.rotation_y.to_degrees() % 360.0;
+            let y_normalized = if y_degrees < 0.0 { y_degrees + 360.0 } else { y_degrees };
+            let y_angle_handle_x = angle_slider_x + (y_normalized / 360.0) * angle_slider_width;
+            draw_rectangle(
+                y_angle_handle_x - 5.0,
+                angle_slider_y + angle_slider_spacing + 2.0,
+                10.0,
+                angle_slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Z angle slider
+            draw_text(
+                "Z:",
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing * 2.0 - 5.0,
+                14.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
             draw_text(
-                &format!("Z: {:.1}°", viewer.rotation_z.to_degrees()),
-                panel_x + 20.0,
-                panel_y + 90.0,
-                16.0,
+                "0°",
+                angle_slider_x - 15.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "180°",
+                angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "360°",
+                angle_slider_x + angle_slider_width + 5.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing * 2.0,
+                angle_slider_width,
+                angle_slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Z angle slider handle (normalize to 0-360 degrees)
+            let z_degrees = viewer.rotation_z.to_degrees() % 360.0;
+            let z_normalized = if z_degrees < 0.0 { z_degrees + 360.0 } else { z_degrees };
+            let z_angle_handle_x = angle_slider_x + (z_normalized / 360.0) * angle_slider_width;
+            draw_rectangle(
+                z_angle_handle_x - 5.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 2.0,
+                10.0,
+                angle_slider_height - 4.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
             // Velocity sliders
             let slider_x = panel_x + 20.0;
-            let slider_y = panel_y + 110.0;
+            let slider_y = panel_y + 180.0;
             let slider_width = 200.0;
             let slider_height = 20.0;
-            let slider_spacing = 30.0;
+            let slider_spacing = 35.0;
             
             // X velocity slider
             draw_text(
-                "X Vel:",
+                "dX:",
                 slider_x,
                 slider_y - 5.0,
                 14.0,
@@ -554,7 +693,7 @@ async fn main() {
             
             // Y velocity slider
             draw_text(
-                "Y Vel:",
+                "dY:",
                 slider_x,
                 slider_y + slider_spacing - 5.0,
                 14.0,
@@ -613,7 +752,7 @@ async fn main() {
             
             // Z velocity slider
             draw_text(
-                "Z Vel:",
+                "dZ:",
                 slider_x,
                 slider_y + slider_spacing * 2.0 - 5.0,
                 14.0,
@@ -674,7 +813,7 @@ async fn main() {
             draw_text(
                 "Click and drag sliders to adjust rotation speed",
                 panel_x + 10.0,
-                panel_y + 180.0,
+                panel_y + 310.0,
                 12.0,
                 if viewer.dark_background { Color::new(0.7, 0.7, 0.7, 1.0) } else { Color::new(0.4, 0.4, 0.4, 1.0) }
             );
@@ -934,15 +1073,30 @@ async fn main() {
                 let panel_x = 10.0;
                 let panel_y = 50.0;
                 let slider_x = panel_x + 20.0;
-                let slider_y = panel_y + 110.0;
+                let slider_y = panel_y + 180.0;
                 let slider_width = 200.0;
                 let slider_height = 20.0;
-                let slider_spacing = 30.0;
+                let slider_spacing = 35.0;
                 
-                // Check which slider was clicked
+                // Check angle sliders first
+                let angle_slider_y = panel_y + 50.0;
+                let angle_slider_spacing = 35.0;
+                
                 if mouse_pos.0 >= slider_x && mouse_pos.0 <= slider_x + slider_width {
+                    // X angle slider
+                    if mouse_pos.1 >= angle_slider_y && mouse_pos.1 <= angle_slider_y + slider_height {
+                        viewer.dragging_angle_slider = Some(0);
+                    }
+                    // Y angle slider
+                    else if mouse_pos.1 >= angle_slider_y + angle_slider_spacing && mouse_pos.1 <= angle_slider_y + angle_slider_spacing + slider_height {
+                        viewer.dragging_angle_slider = Some(1);
+                    }
+                    // Z angle slider
+                    else if mouse_pos.1 >= angle_slider_y + angle_slider_spacing * 2.0 && mouse_pos.1 <= angle_slider_y + angle_slider_spacing * 2.0 + slider_height {
+                        viewer.dragging_angle_slider = Some(2);
+                    }
                     // X velocity slider
-                    if mouse_pos.1 >= slider_y && mouse_pos.1 <= slider_y + slider_height {
+                    else if mouse_pos.1 >= slider_y && mouse_pos.1 <= slider_y + slider_height {
                         viewer.dragging_slider = Some(0);
                     }
                     // Y velocity slider
@@ -960,6 +1114,7 @@ async fn main() {
         // Handle mouse release (stop dragging)
         if is_mouse_button_released(MouseButton::Left) {
             viewer.dragging_slider = None;
+            viewer.dragging_angle_slider = None;
         }
         
         // Handle slider dragging
@@ -982,6 +1137,25 @@ async fn main() {
                 0 => viewer.rotation_velocity_x = velocity,
                 1 => viewer.rotation_velocity_y = velocity,
                 2 => viewer.rotation_velocity_z = velocity,
+                _ => {}
+            }
+        }
+        
+        // Handle angle slider dragging
+        if let Some(angle_slider_index) = viewer.dragging_angle_slider {
+            let mouse_pos = mouse_position();
+            let panel_x = 10.0;
+            let slider_x = panel_x + 20.0;
+            let slider_width = 200.0;
+            
+            let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
+            let degrees = normalized * 360.0;
+            let radians = degrees.to_radians();
+            
+            match angle_slider_index {
+                0 => viewer.rotation_x = radians,
+                1 => viewer.rotation_y = radians,
+                2 => viewer.rotation_z = radians,
                 _ => {}
             }
         }
