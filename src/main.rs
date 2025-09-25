@@ -119,7 +119,12 @@ const ICOSAHEDRON_EDGES: [(usize, usize); 30] = [
 ];
 
 struct StereogramViewer {
-    rotation: f32,
+    rotation_x: f32,
+    rotation_y: f32,
+    rotation_z: f32,
+    rotation_velocity_x: f32,
+    rotation_velocity_y: f32,
+    rotation_velocity_z: f32,
     eye_separation: f32,
     perspective_distance: f32,
     is_paused: bool,
@@ -129,12 +134,20 @@ struct StereogramViewer {
     dark_background: bool,
     orthographic: bool,
     current_solid: PlatonicSolid,
+    show_3d_controls: bool,
+    dragging_slider: Option<usize>, // None, Some(0) for X, Some(1) for Y, Some(2) for Z
+    dragging_angle_slider: Option<usize>, // None, Some(0) for X angle, Some(1) for Y angle, Some(2) for Z angle
 }
 
 impl StereogramViewer {
     fn new() -> Self {
         Self {
-            rotation: 0.0,
+            rotation_x: 0.0,
+            rotation_y: 0.0,
+            rotation_z: 0.0,
+            rotation_velocity_x: 0.0025, // Slower X rotation (halved)
+            rotation_velocity_y: 0.005,  // Normal Y rotation (halved)
+            rotation_velocity_z: 0.0015, // Slower Z rotation (halved)
             eye_separation: 0.06, // Reduced for iPhone dimensions
             perspective_distance: 10.0, // Initial perspective distance
             is_paused: false,
@@ -147,12 +160,17 @@ impl StereogramViewer {
             dark_background: false, // Default to white background
             orthographic: false, // Perspective projection is default
             current_solid: PlatonicSolid::Cube, // Default to cube
+            show_3d_controls: false, // Default to off
+            dragging_slider: None, // No slider being dragged initially
+            dragging_angle_slider: None, // No angle slider being dragged initially
         }
     }
 
     fn update(&mut self) {
         if !self.is_paused {
-            self.rotation += 0.01;
+            self.rotation_x += self.rotation_velocity_x;
+            self.rotation_y += self.rotation_velocity_y;
+            self.rotation_z += self.rotation_velocity_z;
         }
     }
     
@@ -178,13 +196,13 @@ impl StereogramViewer {
 
     fn draw_solid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
         // Apply rotation to vertices first
-        let rotation_y = self.rotation;
-        let rotation_x = self.rotation * 0.5;
-
-        // Create rotation matrices
-        let rot_y_matrix = Mat4::from_rotation_y(rotation_y);
-        let rot_x_matrix = Mat4::from_rotation_x(rotation_x);
-        let combined_rotation = rot_y_matrix * rot_x_matrix;
+        // Create rotation matrices for each axis
+        let rot_x_matrix = Mat4::from_rotation_x(self.rotation_x);
+        let rot_y_matrix = Mat4::from_rotation_y(self.rotation_y);
+        let rot_z_matrix = Mat4::from_rotation_z(self.rotation_z);
+        
+        // Combine rotations: Z * Y * X (order matters for 3D rotation)
+        let combined_rotation = rot_z_matrix * rot_y_matrix * rot_x_matrix;
 
         // Transform and project vertices to 2D screen space manually
         let screen_center_x = screen_width() / 4.0 + screen_offset_x; // Quarter width + offset for each view
@@ -235,26 +253,26 @@ impl StereogramViewer {
             projected_vertices.push(Vec2::new(projected_x, projected_y));
         }
 
-        // Draw wireframe edges using 2D lines with optional depth-based coloring
+        // Draw wireframe edges using 2D lines with depth sorting
         let edges = self.get_edges();
+        
+        // Collect all edges with their depth information for sorting
+        let mut edge_data: Vec<(f32, Vec2, Vec2, Color)> = Vec::new();
+        
         for &(start_idx, end_idx) in edges {
             let start_2d = projected_vertices[start_idx];
             let end_2d = projected_vertices[end_idx];
             
+            // Calculate depth for sorting (use raw Z values after transformation)
+            let start_3d = transformed_vertices[start_idx];
+            let end_3d = transformed_vertices[end_idx];
+            let avg_z = (start_3d.z + end_3d.z) / 2.0;
+            
             let wire_color = if self.depth_coloring {
-                // Get 3D positions for depth calculation
-                let start_3d = transformed_vertices[start_idx];
-                let end_3d = transformed_vertices[end_idx];
-                
-                // Calculate average Z distance (after camera adjustment)
-                let start_z = start_3d.z - camera_offset + perspective_distance;
-                let end_z = end_3d.z - camera_offset + perspective_distance;
-                let avg_z = (start_z + end_z) / 2.0;
-                
-                // Map Z distance to color intensity (closer = brighter, farther = darker)
-                // Dynamic Z range based on current perspective distance
-                let min_z = self.perspective_distance - 1.0;
-                let max_z = self.perspective_distance + 1.0;
+                // Map Z distance to color intensity (closer = darker, farther = lighter)
+                // Use raw Z values for consistent depth calculation
+                let min_z = -2.0; // Approximate range for transformed vertices
+                let max_z = 2.0;
                 let intensity = ((max_z - avg_z) / (max_z - min_z)).clamp(0.2, 1.0);
                 
                 // Create color based on depth and background
@@ -274,6 +292,15 @@ impl StereogramViewer {
                 }
             };
             
+            // Store edge data with depth for sorting
+            edge_data.push((avg_z, start_2d, end_2d, wire_color));
+        }
+        
+        // Sort edges by depth (nearest first, farthest last) for proper depth sorting
+        edge_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Draw edges from front to back (nearest first)
+        for (_, start_2d, end_2d, wire_color) in edge_data {
             draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, wire_color);
         }
     }
@@ -340,42 +367,471 @@ async fn main() {
         set_default_camera();
         
         // Draw help button (always visible)
-        let button_x = 10.0;
-        let button_y = 10.0;
+        let help_button_x = 10.0;
+        let help_button_y = 10.0;
         let button_size = 30.0;
         
-        // Button background
+        // Help button background
         draw_rectangle(
-            button_x,
-            button_y,
+            help_button_x,
+            help_button_y,
             button_size,
             button_size,
             if viewer.dark_background { Color::new(0.2, 0.2, 0.2, 0.8) } else { Color::new(0.9, 0.9, 0.9, 0.8) }
         );
         
-        // Button border
+        // Help button border
         draw_rectangle_lines(
-            button_x,
-            button_y,
+            help_button_x,
+            help_button_y,
             button_size,
             button_size,
             2.0,
             if viewer.dark_background { WHITE } else { BLACK }
         );
         
-        // Button text "?"
+        // Help button text "?"
         draw_text(
             "?",
-            button_x + 8.0,
-            button_y + 22.0,
+            help_button_x + 8.0,
+            help_button_y + 22.0,
             20.0,
             if viewer.dark_background { WHITE } else { BLACK }
         );
         
+        // Draw 3D controls button (always visible)
+        let controls_button_x = 50.0;
+        let controls_button_y = 10.0;
+        
+        // 3D controls button background
+        draw_rectangle(
+            controls_button_x,
+            controls_button_y,
+            button_size,
+            button_size,
+            if viewer.show_3d_controls {
+                if viewer.dark_background { Color::new(0.3, 0.5, 0.3, 0.8) } else { Color::new(0.7, 0.9, 0.7, 0.8) }
+            } else {
+                if viewer.dark_background { Color::new(0.2, 0.2, 0.2, 0.8) } else { Color::new(0.9, 0.9, 0.9, 0.8) }
+            }
+        );
+        
+        // 3D controls button border
+        draw_rectangle_lines(
+            controls_button_x,
+            controls_button_y,
+            button_size,
+            button_size,
+            2.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
+        
+        // 3D controls button text "3D"
+        draw_text(
+            "3D",
+            controls_button_x + 4.0,
+            controls_button_y + 22.0,
+            16.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
+        
+        // Draw 3D controls panel
+        if viewer.show_3d_controls {
+            let panel_x = 10.0;
+            let panel_y = 50.0;
+            let panel_width = 300.0;
+            let panel_height = 340.0;
+            
+            // Panel background
+            draw_rectangle(
+                panel_x,
+                panel_y,
+                panel_width,
+                panel_height,
+                if viewer.dark_background { Color::new(0.1, 0.1, 0.1, 0.9) } else { Color::new(0.95, 0.95, 0.95, 0.9) }
+            );
+            
+            // Panel border
+            draw_rectangle_lines(
+                panel_x,
+                panel_y,
+                panel_width,
+                panel_height,
+                2.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Panel title
+            draw_text(
+                "3D Rotation Controls",
+                panel_x + 10.0,
+                panel_y + 25.0,
+                20.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Rotation angle sliders (0-360 degrees)
+            let angle_slider_x = panel_x + 20.0;
+            let angle_slider_y = panel_y + 50.0;
+            let angle_slider_width = 200.0;
+            let angle_slider_height = 20.0;
+            let angle_slider_spacing = 35.0;
+            
+            // X angle slider
+            draw_text(
+                "X:",
+                angle_slider_x,
+                angle_slider_y - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (0, 180, 360)
+            draw_text(
+                "0°",
+                angle_slider_x - 15.0,
+                angle_slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "180°",
+                angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                angle_slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "360°",
+                angle_slider_x + angle_slider_width + 5.0,
+                angle_slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // X angle slider track
+            draw_rectangle(
+                angle_slider_x,
+                angle_slider_y,
+                angle_slider_width,
+                angle_slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // X angle slider handle (normalize to 0-360 degrees)
+            let x_degrees = viewer.rotation_x.to_degrees() % 360.0;
+            let x_normalized = if x_degrees < 0.0 { x_degrees + 360.0 } else { x_degrees };
+            let x_angle_handle_x = angle_slider_x + (x_normalized / 360.0) * angle_slider_width;
+            draw_rectangle(
+                x_angle_handle_x - 5.0,
+                angle_slider_y + 2.0,
+                10.0,
+                angle_slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Y angle slider
+            draw_text(
+                "Y:",
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                "0°",
+                angle_slider_x - 15.0,
+                angle_slider_y + angle_slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "180°",
+                angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                angle_slider_y + angle_slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "360°",
+                angle_slider_x + angle_slider_width + 5.0,
+                angle_slider_y + angle_slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing,
+                angle_slider_width,
+                angle_slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Y angle slider handle (normalize to 0-360 degrees)
+            let y_degrees = viewer.rotation_y.to_degrees() % 360.0;
+            let y_normalized = if y_degrees < 0.0 { y_degrees + 360.0 } else { y_degrees };
+            let y_angle_handle_x = angle_slider_x + (y_normalized / 360.0) * angle_slider_width;
+            draw_rectangle(
+                y_angle_handle_x - 5.0,
+                angle_slider_y + angle_slider_spacing + 2.0,
+                10.0,
+                angle_slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Z angle slider
+            draw_text(
+                "Z:",
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing * 2.0 - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                "0°",
+                angle_slider_x - 15.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "180°",
+                angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "360°",
+                angle_slider_x + angle_slider_width + 5.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                angle_slider_x,
+                angle_slider_y + angle_slider_spacing * 2.0,
+                angle_slider_width,
+                angle_slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Z angle slider handle (normalize to 0-360 degrees)
+            let z_degrees = viewer.rotation_z.to_degrees() % 360.0;
+            let z_normalized = if z_degrees < 0.0 { z_degrees + 360.0 } else { z_degrees };
+            let z_angle_handle_x = angle_slider_x + (z_normalized / 360.0) * angle_slider_width;
+            draw_rectangle(
+                z_angle_handle_x - 5.0,
+                angle_slider_y + angle_slider_spacing * 2.0 + 2.0,
+                10.0,
+                angle_slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Velocity sliders
+            let slider_x = panel_x + 20.0;
+            let slider_y = panel_y + 180.0;
+            let slider_width = 200.0;
+            let slider_height = 20.0;
+            let slider_spacing = 35.0;
+            
+            // X velocity slider
+            draw_text(
+                "dX:",
+                slider_x,
+                slider_y - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (-, 0, +)
+            draw_text(
+                "-",
+                slider_x - 10.0,
+                slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "0",
+                slider_x + slider_width / 2.0 - 3.0,
+                slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "+",
+                slider_x + slider_width + 5.0,
+                slider_y + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider track
+            draw_rectangle(
+                slider_x,
+                slider_y,
+                slider_width,
+                slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Center line on slider
+            draw_line(
+                slider_x + slider_width / 2.0,
+                slider_y,
+                slider_x + slider_width / 2.0,
+                slider_y + slider_height,
+                1.0,
+                if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+            );
+            
+            // Slider handle
+            let x_handle_x = slider_x + (viewer.rotation_velocity_x + 0.05) / 0.10 * slider_width;
+            draw_rectangle(
+                x_handle_x - 5.0,
+                slider_y + 2.0,
+                10.0,
+                slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Y velocity slider
+            draw_text(
+                "dY:",
+                slider_x,
+                slider_y + slider_spacing - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (-, 0, +)
+            draw_text(
+                "-",
+                slider_x - 10.0,
+                slider_y + slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "0",
+                slider_x + slider_width / 2.0 - 3.0,
+                slider_y + slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "+",
+                slider_x + slider_width + 5.0,
+                slider_y + slider_spacing + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                slider_x,
+                slider_y + slider_spacing,
+                slider_width,
+                slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Center line on slider
+            draw_line(
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing,
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing + slider_height,
+                1.0,
+                if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+            );
+            
+            let y_handle_x = slider_x + (viewer.rotation_velocity_y + 0.05) / 0.10 * slider_width;
+            draw_rectangle(
+                y_handle_x - 5.0,
+                slider_y + slider_spacing + 2.0,
+                10.0,
+                slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Z velocity slider
+            draw_text(
+                "dZ:",
+                slider_x,
+                slider_y + slider_spacing * 2.0 - 5.0,
+                14.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Slider labels (-, 0, +)
+            draw_text(
+                "-",
+                slider_x - 10.0,
+                slider_y + slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "0",
+                slider_x + slider_width / 2.0 - 3.0,
+                slider_y + slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            draw_text(
+                "+",
+                slider_x + slider_width + 5.0,
+                slider_y + slider_spacing * 2.0 + 15.0,
+                12.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_rectangle(
+                slider_x,
+                slider_y + slider_spacing * 2.0,
+                slider_width,
+                slider_height,
+                if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+            );
+            
+            // Center line on slider
+            draw_line(
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing * 2.0,
+                slider_x + slider_width / 2.0,
+                slider_y + slider_spacing * 2.0 + slider_height,
+                1.0,
+                if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+            );
+            
+            let z_handle_x = slider_x + (viewer.rotation_velocity_z + 0.05) / 0.10 * slider_width;
+            draw_rectangle(
+                z_handle_x - 5.0,
+                slider_y + slider_spacing * 2.0 + 2.0,
+                10.0,
+                slider_height - 4.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Instructions
+            draw_text(
+                "Click and drag sliders to adjust rotation speed",
+                panel_x + 10.0,
+                panel_y + 310.0,
+                12.0,
+                if viewer.dark_background { Color::new(0.7, 0.7, 0.7, 1.0) } else { Color::new(0.4, 0.4, 0.4, 1.0) }
+            );
+        }
+        
         if viewer.show_ui {
             draw_text(
                 "3D Platonic Solids Stereogram Viewer",
-                50.0,
+                90.0,
                 30.0,
                 25.0,
                 if viewer.dark_background { WHITE } else { BLACK }
@@ -390,10 +846,26 @@ async fn main() {
             );
             
             draw_text(
-                &format!("Rotation: {:.1}°", viewer.rotation.to_degrees()),
+                &format!("Rotation X: {:.1}°", viewer.rotation_x.to_degrees()),
                 10.0,
                 90.0,
-                20.0,
+                18.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                &format!("Rotation Y: {:.1}°", viewer.rotation_y.to_degrees()),
+                10.0,
+                110.0,
+                18.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            draw_text(
+                &format!("Rotation Z: {:.1}°", viewer.rotation_z.to_degrees()),
+                10.0,
+                130.0,
+                18.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
@@ -402,7 +874,7 @@ async fn main() {
                 draw_text(
                     "PAUSED",
                     10.0,
-                    115.0,
+                    155.0,
                     25.0,
                     RED
                 );
@@ -411,7 +883,7 @@ async fn main() {
             draw_text(
                 "Look \"through\" the image to see 3D effect!",
                 10.0,
-                120.0,
+                180.0,
                 18.0,
                 if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) } // Dark yellow for white background
             );
@@ -419,7 +891,7 @@ async fn main() {
             draw_text(
                 "Press SPACE to pause/resume animation",
                 10.0,
-                150.0,
+                210.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) } // Dark green for white background
             );
@@ -427,7 +899,7 @@ async fn main() {
             draw_text(
                 "Press G to toggle guides",
                 10.0,
-                175.0,
+                235.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -435,7 +907,7 @@ async fn main() {
             draw_text(
                 "Press C to toggle depth coloring",
                 10.0,
-                200.0,
+                260.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -443,7 +915,7 @@ async fn main() {
             draw_text(
                 "Press B to toggle background (black/white)",
                 10.0,
-                225.0,
+                285.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -451,7 +923,7 @@ async fn main() {
             draw_text(
                 "Press T to toggle all text/UI",
                 10.0,
-                250.0,
+                310.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -459,7 +931,7 @@ async fn main() {
             draw_text(
                 "Press O to toggle orthographic/perspective projection",
                 10.0,
-                275.0,
+                335.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -467,7 +939,7 @@ async fn main() {
             draw_text(
                 "Press S to cycle through Platonic solids",
                 10.0,
-                300.0,
+                360.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -475,7 +947,7 @@ async fn main() {
             draw_text(
                 "Press LEFT/RIGHT to adjust eye separation",
                 10.0,
-                325.0,
+                385.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -483,7 +955,7 @@ async fn main() {
             draw_text(
                 "Press UP/DOWN to adjust perspective (distance + scale)",
                 10.0,
-                350.0,
+                410.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -582,16 +1054,118 @@ async fn main() {
             viewer.current_solid = viewer.current_solid.next();
         }
         
-        // Handle help button click
+        // Handle button clicks
         if is_mouse_button_pressed(MouseButton::Left) {
             let mouse_pos = mouse_position();
-            let button_x = 10.0;
-            let button_y = 10.0;
+            
+            // Help button (upper left)
+            let help_button_x = 10.0;
+            let help_button_y = 10.0;
             let button_size = 30.0;
             
-            if mouse_pos.0 >= button_x && mouse_pos.0 <= button_x + button_size &&
-               mouse_pos.1 >= button_y && mouse_pos.1 <= button_y + button_size {
+            if mouse_pos.0 >= help_button_x && mouse_pos.0 <= help_button_x + button_size &&
+               mouse_pos.1 >= help_button_y && mouse_pos.1 <= help_button_y + button_size {
                 viewer.show_ui = !viewer.show_ui;
+            }
+            
+            // 3D controls button (next to help button)
+            let controls_button_x = 50.0;
+            let controls_button_y = 10.0;
+            
+            if mouse_pos.0 >= controls_button_x && mouse_pos.0 <= controls_button_x + button_size &&
+               mouse_pos.1 >= controls_button_y && mouse_pos.1 <= controls_button_y + button_size {
+                viewer.show_3d_controls = !viewer.show_3d_controls;
+            }
+            
+            // Handle slider interactions when 3D controls are visible
+            if viewer.show_3d_controls {
+                let panel_x = 10.0;
+                let panel_y = 50.0;
+                let slider_x = panel_x + 20.0;
+                let slider_y = panel_y + 180.0;
+                let slider_width = 200.0;
+                let slider_height = 20.0;
+                let slider_spacing = 35.0;
+                
+                // Check angle sliders first
+                let angle_slider_y = panel_y + 50.0;
+                let angle_slider_spacing = 35.0;
+                
+                if mouse_pos.0 >= slider_x && mouse_pos.0 <= slider_x + slider_width {
+                    // X angle slider
+                    if mouse_pos.1 >= angle_slider_y && mouse_pos.1 <= angle_slider_y + slider_height {
+                        viewer.dragging_angle_slider = Some(0);
+                    }
+                    // Y angle slider
+                    else if mouse_pos.1 >= angle_slider_y + angle_slider_spacing && mouse_pos.1 <= angle_slider_y + angle_slider_spacing + slider_height {
+                        viewer.dragging_angle_slider = Some(1);
+                    }
+                    // Z angle slider
+                    else if mouse_pos.1 >= angle_slider_y + angle_slider_spacing * 2.0 && mouse_pos.1 <= angle_slider_y + angle_slider_spacing * 2.0 + slider_height {
+                        viewer.dragging_angle_slider = Some(2);
+                    }
+                    // X velocity slider
+                    else if mouse_pos.1 >= slider_y && mouse_pos.1 <= slider_y + slider_height {
+                        viewer.dragging_slider = Some(0);
+                    }
+                    // Y velocity slider
+                    else if mouse_pos.1 >= slider_y + slider_spacing && mouse_pos.1 <= slider_y + slider_spacing + slider_height {
+                        viewer.dragging_slider = Some(1);
+                    }
+                    // Z velocity slider
+                    else if mouse_pos.1 >= slider_y + slider_spacing * 2.0 && mouse_pos.1 <= slider_y + slider_spacing * 2.0 + slider_height {
+                        viewer.dragging_slider = Some(2);
+                    }
+                }
+            }
+        }
+        
+        // Handle mouse release (stop dragging)
+        if is_mouse_button_released(MouseButton::Left) {
+            viewer.dragging_slider = None;
+            viewer.dragging_angle_slider = None;
+        }
+        
+        // Handle slider dragging
+        if let Some(slider_index) = viewer.dragging_slider {
+            let mouse_pos = mouse_position();
+            let panel_x = 10.0;
+            let slider_x = panel_x + 20.0;
+            let slider_width = 200.0;
+            
+            let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
+            // Increased range: -0.05 to 0.05 with discrete steps
+            let raw_velocity = (normalized * 0.10) - 0.05; // Range: -0.05 to 0.05
+            
+            // Create discrete steps: -0.05, -0.045, -0.04, ..., 0.00, ..., 0.04, 0.045, 0.05
+            let step_size = 0.005;
+            let velocity = (raw_velocity / step_size).round() * step_size;
+            let velocity = velocity.clamp(-0.05, 0.05);
+            
+            match slider_index {
+                0 => viewer.rotation_velocity_x = velocity,
+                1 => viewer.rotation_velocity_y = velocity,
+                2 => viewer.rotation_velocity_z = velocity,
+                _ => {}
+            }
+        }
+        
+        // Handle angle slider dragging
+        if let Some(angle_slider_index) = viewer.dragging_angle_slider {
+            let mouse_pos = mouse_position();
+            let panel_x = 10.0;
+            let slider_x = panel_x + 20.0;
+            let slider_width = 200.0;
+            
+            let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
+            let degrees = normalized * 360.0;
+            let radians = degrees.to_radians();
+            
+            match angle_slider_index {
+                0 => viewer.rotation_x = radians,
+                1 => viewer.rotation_y = radians,
+                2 => viewer.rotation_z = radians,
+                _ => {}
             }
         }
         
