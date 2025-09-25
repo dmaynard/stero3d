@@ -253,26 +253,26 @@ impl StereogramViewer {
             projected_vertices.push(Vec2::new(projected_x, projected_y));
         }
 
-        // Draw wireframe edges using 2D lines with optional depth-based coloring
+        // Draw wireframe edges using 2D lines with depth sorting
         let edges = self.get_edges();
+        
+        // Collect all edges with their depth information for sorting
+        let mut edge_data: Vec<(f32, Vec2, Vec2, Color)> = Vec::new();
+        
         for &(start_idx, end_idx) in edges {
             let start_2d = projected_vertices[start_idx];
             let end_2d = projected_vertices[end_idx];
             
+            // Calculate depth for sorting (use raw Z values after transformation)
+            let start_3d = transformed_vertices[start_idx];
+            let end_3d = transformed_vertices[end_idx];
+            let avg_z = (start_3d.z + end_3d.z) / 2.0;
+            
             let wire_color = if self.depth_coloring {
-                // Get 3D positions for depth calculation
-                let start_3d = transformed_vertices[start_idx];
-                let end_3d = transformed_vertices[end_idx];
-                
-                // Calculate average Z distance (after camera adjustment)
-                let start_z = start_3d.z - camera_offset + perspective_distance;
-                let end_z = end_3d.z - camera_offset + perspective_distance;
-                let avg_z = (start_z + end_z) / 2.0;
-                
-                // Map Z distance to color intensity (closer = brighter, farther = darker)
-                // Dynamic Z range based on current perspective distance
-                let min_z = self.perspective_distance - 1.0;
-                let max_z = self.perspective_distance + 1.0;
+                // Map Z distance to color intensity (closer = darker, farther = lighter)
+                // Use raw Z values for consistent depth calculation
+                let min_z = -2.0; // Approximate range for transformed vertices
+                let max_z = 2.0;
                 let intensity = ((max_z - avg_z) / (max_z - min_z)).clamp(0.2, 1.0);
                 
                 // Create color based on depth and background
@@ -292,6 +292,15 @@ impl StereogramViewer {
                 }
             };
             
+            // Store edge data with depth for sorting
+            edge_data.push((avg_z, start_2d, end_2d, wire_color));
+        }
+        
+        // Sort edges by depth (nearest first, farthest last) for proper depth sorting
+        edge_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Draw edges from front to back (nearest first)
+        for (_, start_2d, end_2d, wire_color) in edge_data {
             draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, wire_color);
         }
     }
@@ -822,7 +831,7 @@ async fn main() {
         if viewer.show_ui {
             draw_text(
                 "3D Platonic Solids Stereogram Viewer",
-                50.0,
+                90.0,
                 30.0,
                 25.0,
                 if viewer.dark_background { WHITE } else { BLACK }
