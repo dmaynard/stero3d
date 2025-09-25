@@ -1,5 +1,7 @@
 # Stereo3D - 3D Stereogram Platonic Solids Viewer
 
+🌐 **[Try it live in your browser!](https://dmaynard.github.io/stero3d/)**
+
 A real-time 3D stereogram viewer built with Rust and Macroquad that displays rotating wireframe Platonic solids as parallel stereograms for 3D viewing without special glasses.
 
 ## Features
