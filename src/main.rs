@@ -145,9 +145,9 @@ impl StereogramViewer {
             rotation_x: 0.0,
             rotation_y: 0.0,
             rotation_z: 0.0,
-            rotation_velocity_x: 0.005, // Slower X rotation
-            rotation_velocity_y: 0.01,  // Normal Y rotation
-            rotation_velocity_z: 0.003, // Slower Z rotation
+            rotation_velocity_x: 0.0025, // Slower X rotation (halved)
+            rotation_velocity_y: 0.005,  // Normal Y rotation (halved)
+            rotation_velocity_z: 0.0015, // Slower Z rotation (halved)
             eye_separation: 0.06, // Reduced for iPhone dimensions
             perspective_distance: 10.0, // Initial perspective distance
             is_paused: false,
