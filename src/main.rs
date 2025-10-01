@@ -1,5 +1,24 @@
 use macroquad::prelude::*;
 
+// 4D vector type for hypersolids
+#[derive(Clone, Copy, Debug)]
+struct Vec4D {
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
+}
+
+impl Vec4D {
+    const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+        Self { x, y, z, w }
+    }
+    
+    fn to_vec3(self) -> Vec3 {
+        Vec3::new(self.x, self.y, self.z)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum PlatonicSolid {
     Tetrahedron = 0,
@@ -7,6 +26,13 @@ enum PlatonicSolid {
     Octahedron = 2,
     Dodecahedron = 3,
     Icosahedron = 4,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Hypersolid {
+    Tesseract = 0,
+    FourSimplex = 1,
+    FourOrthoplex = 2,
 }
 
 impl PlatonicSolid {
@@ -27,6 +53,24 @@ impl PlatonicSolid {
             PlatonicSolid::Octahedron => "Octahedron",
             PlatonicSolid::Dodecahedron => "Dodecahedron",
             PlatonicSolid::Icosahedron => "Icosahedron",
+        }
+    }
+}
+
+impl Hypersolid {
+    fn next(self) -> Self {
+        match self {
+            Hypersolid::Tesseract => Hypersolid::FourSimplex,
+            Hypersolid::FourSimplex => Hypersolid::FourOrthoplex,
+            Hypersolid::FourOrthoplex => Hypersolid::Tesseract,
+        }
+    }
+    
+    fn name(self) -> &'static str {
+        match self {
+            Hypersolid::Tesseract => "Tesseract",
+            Hypersolid::FourSimplex => "4-Simplex",
+            Hypersolid::FourOrthoplex => "4-Orthoplex",
         }
     }
 }
@@ -118,6 +162,64 @@ const ICOSAHEDRON_EDGES: [(usize, usize); 30] = [
     (4, 10), (5, 7), (5, 8), (5, 10), (6, 9), (6, 11), (7, 9), (7, 11), (8, 10), (9, 11),
 ];
 
+// Tesseract (4D hypercube) - 16 vertices, 32 edges
+const TESSERACT_VERTICES: [Vec4D; 16] = [
+    // Bottom cube (w = -2.0) - spread out more in 4D space
+    Vec4D::new(-1.5, -1.5, -1.5, -2.0), Vec4D::new(1.5, -1.5, -1.5, -2.0),
+    Vec4D::new(-1.5, 1.5, -1.5, -2.0), Vec4D::new(1.5, 1.5, -1.5, -2.0),
+    Vec4D::new(-1.5, -1.5, 1.5, -2.0), Vec4D::new(1.5, -1.5, 1.5, -2.0),
+    Vec4D::new(-1.5, 1.5, 1.5, -2.0), Vec4D::new(1.5, 1.5, 1.5, -2.0),
+    // Top cube (w = 2.0) - spread out more in 4D space
+    Vec4D::new(-1.5, -1.5, -1.5, 2.0), Vec4D::new(1.5, -1.5, -1.5, 2.0),
+    Vec4D::new(-1.5, 1.5, -1.5, 2.0), Vec4D::new(1.5, 1.5, -1.5, 2.0),
+    Vec4D::new(-1.5, -1.5, 1.5, 2.0), Vec4D::new(1.5, -1.5, 1.5, 2.0),
+    Vec4D::new(-1.5, 1.5, 1.5, 2.0), Vec4D::new(1.5, 1.5, 1.5, 2.0),
+];
+
+const TESSERACT_EDGES: [(usize, usize); 32] = [
+    // Bottom cube edges
+    (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3), (2, 6), (3, 7),
+    (4, 5), (4, 6), (5, 7), (6, 7),
+    // Top cube edges  
+    (8, 9), (8, 10), (8, 12), (9, 11), (9, 13), (10, 11), (10, 14), (11, 15),
+    (12, 13), (12, 14), (13, 15), (14, 15),
+    // Connecting edges (between bottom and top cubes)
+    (0, 8), (1, 9), (2, 10), (3, 11), (4, 12), (5, 13), (6, 14), (7, 15),
+];
+
+// 4-Simplex (4D tetrahedron) - 5 vertices, 10 edges
+const FOUR_SIMPLEX_VERTICES: [Vec4D; 5] = [
+    Vec4D::new(1.0, 1.0, 1.0, 1.0),
+    Vec4D::new(-1.0, -1.0, 1.0, 1.0),
+    Vec4D::new(-1.0, 1.0, -1.0, 1.0),
+    Vec4D::new(1.0, -1.0, -1.0, 1.0),
+    Vec4D::new(0.0, 0.0, 0.0, -1.5),
+];
+
+const FOUR_SIMPLEX_EDGES: [(usize, usize); 10] = [
+    (0, 1), (0, 2), (0, 3), (0, 4),
+    (1, 2), (1, 3), (1, 4),
+    (2, 3), (2, 4),
+    (3, 4),
+];
+
+// 4-Orthoplex (4D octahedron) - 8 vertices, 24 edges
+const FOUR_ORTHOPLEX_VERTICES: [Vec4D; 8] = [
+    Vec4D::new(1.0, 0.0, 0.0, 0.0), Vec4D::new(-1.0, 0.0, 0.0, 0.0),
+    Vec4D::new(0.0, 1.0, 0.0, 0.0), Vec4D::new(0.0, -1.0, 0.0, 0.0),
+    Vec4D::new(0.0, 0.0, 1.0, 0.0), Vec4D::new(0.0, 0.0, -1.0, 0.0),
+    Vec4D::new(0.0, 0.0, 0.0, 1.0), Vec4D::new(0.0, 0.0, 0.0, -1.0),
+];
+
+const FOUR_ORTHOPLEX_EDGES: [(usize, usize); 24] = [
+    (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),
+    (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7),
+    (2, 4), (2, 5), (2, 6), (2, 7),
+    (3, 4), (3, 5), (3, 6), (3, 7),
+    (4, 6), (4, 7),
+    (5, 6), (5, 7),
+];
+
 struct StereogramViewer {
     rotation_x: f32,
     rotation_y: f32,
@@ -125,6 +227,19 @@ struct StereogramViewer {
     rotation_velocity_x: f32,
     rotation_velocity_y: f32,
     rotation_velocity_z: f32,
+    // 4D rotations (6 rotation planes: XY, XZ, YZ, XW, YW, ZW)
+    rotation_xy: f32,
+    rotation_xz: f32,
+    rotation_yz: f32,
+    rotation_xw: f32,
+    rotation_yw: f32,
+    rotation_zw: f32,
+    rotation_velocity_xy: f32,
+    rotation_velocity_xz: f32,
+    rotation_velocity_yz: f32,
+    rotation_velocity_xw: f32,
+    rotation_velocity_yw: f32,
+    rotation_velocity_zw: f32,
     eye_separation: f32,
     perspective_distance: f32,
     is_paused: bool,
@@ -134,9 +249,13 @@ struct StereogramViewer {
     dark_background: bool,
     orthographic: bool,
     current_solid: PlatonicSolid,
+    current_hypersolid: Hypersolid,
+    is_4d_mode: bool, // Toggle between 3D and 4D modes
     show_3d_controls: bool,
+    show_4d_controls: bool,
     dragging_slider: Option<usize>, // None, Some(0) for X, Some(1) for Y, Some(2) for Z
     dragging_angle_slider: Option<usize>, // None, Some(0) for X angle, Some(1) for Y angle, Some(2) for Z angle
+    dragging_4d_slider: Option<usize>, // None, Some(0-5) for 4D rotation planes
 }
 
 impl StereogramViewer {
@@ -145,9 +264,22 @@ impl StereogramViewer {
             rotation_x: 0.0,
             rotation_y: 0.0,
             rotation_z: 0.0,
-            rotation_velocity_x: 0.0025, // Slower X rotation (halved)
-            rotation_velocity_y: 0.005,  // Normal Y rotation (halved)
-            rotation_velocity_z: 0.0015, // Slower Z rotation (halved)
+            rotation_velocity_x: 0.0, // Turn off automatic rotations for debugging
+            rotation_velocity_y: 0.0,  // Turn off automatic rotations for debugging
+            rotation_velocity_z: 0.0, // Turn off automatic rotations for debugging
+            // 4D rotations initialized to 0
+            rotation_xy: 0.0,
+            rotation_xz: 0.0,
+            rotation_yz: 0.0,
+            rotation_xw: 0.0,
+            rotation_yw: 0.0,
+            rotation_zw: 0.0,
+            rotation_velocity_xy: 0.0, // Turn off automatic 4D rotations for debugging
+            rotation_velocity_xz: 0.0,
+            rotation_velocity_yz: 0.0,
+            rotation_velocity_xw: 0.0, // Turn off automatic 4D rotations for debugging
+            rotation_velocity_yw: 0.0,
+            rotation_velocity_zw: 0.0,
             eye_separation: 0.06, // Reduced for iPhone dimensions
             perspective_distance: 10.0, // Initial perspective distance
             is_paused: false,
@@ -160,17 +292,32 @@ impl StereogramViewer {
             dark_background: false, // Default to white background
             orthographic: false, // Perspective projection is default
             current_solid: PlatonicSolid::Cube, // Default to cube
+            current_hypersolid: Hypersolid::Tesseract, // Default to tesseract
+            is_4d_mode: false, // Start in 3D mode
             show_3d_controls: false, // Default to off
+            show_4d_controls: false, // Default to off
             dragging_slider: None, // No slider being dragged initially
             dragging_angle_slider: None, // No angle slider being dragged initially
+            dragging_4d_slider: None, // No 4D slider being dragged initially
         }
     }
 
     fn update(&mut self) {
         if !self.is_paused {
-            self.rotation_x += self.rotation_velocity_x;
-            self.rotation_y += self.rotation_velocity_y;
-            self.rotation_z += self.rotation_velocity_z;
+            if self.is_4d_mode {
+                // Update 4D rotations
+                self.rotation_xy += self.rotation_velocity_xy;
+                self.rotation_xz += self.rotation_velocity_xz;
+                self.rotation_yz += self.rotation_velocity_yz;
+                self.rotation_xw += self.rotation_velocity_xw;
+                self.rotation_yw += self.rotation_velocity_yw;
+                self.rotation_zw += self.rotation_velocity_zw;
+            } else {
+                // Update 3D rotations
+                self.rotation_x += self.rotation_velocity_x;
+                self.rotation_y += self.rotation_velocity_y;
+                self.rotation_z += self.rotation_velocity_z;
+            }
         }
     }
     
@@ -192,6 +339,34 @@ impl StereogramViewer {
             PlatonicSolid::Dodecahedron => &DODECAHEDRON_EDGES,
             PlatonicSolid::Icosahedron => &ICOSAHEDRON_EDGES,
         }
+    }
+    
+    fn get_4d_vertices(&self) -> &[Vec4D] {
+        match self.current_hypersolid {
+            Hypersolid::Tesseract => &TESSERACT_VERTICES,
+            Hypersolid::FourSimplex => &FOUR_SIMPLEX_VERTICES,
+            Hypersolid::FourOrthoplex => &FOUR_ORTHOPLEX_VERTICES,
+        }
+    }
+    
+    fn get_4d_edges(&self) -> &[(usize, usize)] {
+        match self.current_hypersolid {
+            Hypersolid::Tesseract => &TESSERACT_EDGES,
+            Hypersolid::FourSimplex => &FOUR_SIMPLEX_EDGES,
+            Hypersolid::FourOrthoplex => &FOUR_ORTHOPLEX_EDGES,
+        }
+    }
+    
+    // Project 4D vertex to 3D space using perspective projection
+    fn project_4d_to_3d(&self, vertex_4d: Vec4D, w_distance: f32) -> Vec3 {
+        // Use perspective projection from 4D to 3D
+        // The W coordinate acts like a perspective distance
+        let perspective_factor = 1.0 / (w_distance + vertex_4d.w + 1.0); // Reduced offset from 4.0 to 1.0
+        Vec3::new(
+            vertex_4d.x * perspective_factor,
+            vertex_4d.y * perspective_factor,
+            vertex_4d.z * perspective_factor,
+        )
     }
 
     fn draw_solid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
@@ -321,10 +496,18 @@ impl StereogramViewer {
         set_default_camera();
         
         // Render left eye view (left half of screen)
-        self.draw_solid_wireframe(-self.eye_separation, 0.0);
+        if self.is_4d_mode {
+            self.draw_4d_hypersolid_wireframe(-self.eye_separation, 0.0);
+        } else {
+            self.draw_solid_wireframe(-self.eye_separation, 0.0);
+        }
         
         // Render right eye view (right half of screen)  
-        self.draw_solid_wireframe(self.eye_separation, half_width);
+        if self.is_4d_mode {
+            self.draw_4d_hypersolid_wireframe(self.eye_separation, half_width);
+        } else {
+            self.draw_solid_wireframe(self.eye_separation, half_width);
+        }
         
         // Draw guides only if show_guides is true
         if self.show_guides {
@@ -341,6 +524,130 @@ impl StereogramViewer {
             let right_aid_x = half_width + half_width / 2.0;
             draw_circle_lines(right_aid_x, fusion_aid_y, fusion_aid_size, outline_thickness, RED);
         }
+    }
+    
+    fn draw_4d_hypersolid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
+        let vertices_4d = self.get_4d_vertices();
+        let edges = self.get_4d_edges();
+        
+        // Debug output removed - issue identified and fixed
+        
+        // Apply 4D rotations to vertices
+        let mut transformed_vertices_4d = Vec::new();
+        for &vertex_4d in vertices_4d {
+            // Apply 4D rotation matrices (simplified - we'll implement proper 4D rotation later)
+            let transformed = vertex_4d;
+            
+            // For now, apply basic rotations (this is a simplified implementation)
+            // TODO: Implement proper 4D rotation matrices
+            transformed_vertices_4d.push(transformed);
+        }
+        
+        // Project 4D vertices to 3D space
+        let w_distance = self.perspective_distance;
+        let mut vertices_3d = Vec::new();
+        for (i, vertex_4d) in transformed_vertices_4d.iter().enumerate() {
+            let vertex_3d = self.project_4d_to_3d(*vertex_4d, w_distance);
+            vertices_3d.push(vertex_3d);
+            
+        }
+        
+        // Now apply 3D transformations and render as before
+        // Different hypersolids need different scales
+        let base_scale = if self.orthographic { 300.0 } else { 300.0 };
+        let scale = match self.current_hypersolid {
+            Hypersolid::Tesseract => base_scale,           // Good at current scale
+            Hypersolid::FourSimplex => base_scale * 2.0,   // Make 4-simplex larger
+            Hypersolid::FourOrthoplex => base_scale * 2.5, // Make 4-orthoplex even larger
+        };
+        
+        // Apply 3D rotation to the projected vertices
+        let rot_x_matrix = Mat4::from_rotation_x(self.rotation_x);
+        let rot_y_matrix = Mat4::from_rotation_y(self.rotation_y);
+        let rot_z_matrix = Mat4::from_rotation_z(self.rotation_z);
+        let combined_rotation = rot_z_matrix * rot_y_matrix * rot_x_matrix;
+        
+        let mut transformed_vertices = Vec::new();
+        for (i, vertex_3d) in vertices_3d.iter().enumerate() {
+            let scaled_vertex = *vertex_3d * scale;
+            let rotated_vertex = combined_rotation.transform_point3(scaled_vertex);
+            transformed_vertices.push(rotated_vertex);
+            
+        }
+        
+        // Calculate 2D screen positions
+        let mut edge_data: Vec<(f32, Vec2, Vec2, Color)> = Vec::new();
+        for &(start_idx, end_idx) in edges {
+            let start_3d = transformed_vertices[start_idx];
+            let end_3d = transformed_vertices[end_idx];
+            
+            
+            let start_2d = if self.orthographic {
+                Vec2::new(
+                    screen_offset_x + start_3d.x + camera_offset + screen_width() * 0.25, // Center in viewport
+                    screen_height() * 0.5 - start_3d.y, // Invert Y to center properly
+                )
+            } else {
+                let perspective_factor = 1.0 / (self.perspective_distance + start_3d.z);
+                Vec2::new(
+                    screen_offset_x + start_3d.x * perspective_factor + camera_offset + screen_width() * 0.25, // Center in viewport
+                    screen_height() * 0.5 - start_3d.y * perspective_factor, // Invert Y to center properly
+                )
+            };
+            
+            let end_2d = if self.orthographic {
+                Vec2::new(
+                    screen_offset_x + end_3d.x + camera_offset + screen_width() * 0.25, // Center in viewport
+                    screen_height() * 0.5 - end_3d.y, // Invert Y to center properly
+                )
+            } else {
+                let perspective_factor = 1.0 / (self.perspective_distance + end_3d.z);
+                Vec2::new(
+                    screen_offset_x + end_3d.x * perspective_factor + camera_offset + screen_width() * 0.25, // Center in viewport
+                    screen_height() * 0.5 - end_3d.y * perspective_factor, // Invert Y to center properly
+                )
+            };
+            
+            
+            let avg_z = (start_3d.z + end_3d.z) / 2.0;
+            
+            let wire_color = if self.depth_coloring {
+                let min_z = -2.0;
+                let max_z = 2.0;
+                let intensity = ((max_z - avg_z) / (max_z - min_z)).clamp(0.2, 1.0);
+                let base_color = if self.dark_background {
+                    Color::new(0.8, 0.8, 0.8, 1.0) // Light gray for dark background
+                } else {
+                    Color::new(0.2, 0.2, 0.2, 1.0) // Dark gray for light background
+                };
+                Color::new(base_color.r * intensity, base_color.g * intensity, base_color.b * intensity, 1.0)
+            } else {
+                if self.dark_background {
+                    Color::new(0.8, 0.8, 0.8, 1.0) // Light gray for dark background
+                } else {
+                    Color::new(0.2, 0.2, 0.2, 1.0) // Dark gray for light background
+                }
+            };
+            
+            edge_data.push((avg_z, start_2d, end_2d, wire_color));
+        }
+        
+        // Sort edges by depth (front to back)
+        edge_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Draw edges
+        for (_, start_2d, end_2d, wire_color) in &edge_data {
+            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, *wire_color);
+        }
+        
+        // Debug: Draw vertex positions as small circles
+        for (i, (_, vertex_2d, _, _)) in edge_data.iter().enumerate() {
+            draw_circle(vertex_2d.x, vertex_2d.y, 3.0, RED);
+            // Draw vertex index as text
+            draw_text(&format!("{}", i), vertex_2d.x + 5.0, vertex_2d.y - 5.0, 12.0, WHITE);
+        }
+        
+        // Debug info moved to main UI section to avoid duplicate drawing
     }
 }
 
@@ -830,7 +1137,7 @@ async fn main() {
         
         if viewer.show_ui {
             draw_text(
-                "3D Platonic Solids Stereogram Viewer",
+                "3D/4D Hypersolids Stereogram Viewer",
                 90.0,
                 30.0,
                 25.0,
@@ -845,10 +1152,39 @@ async fn main() {
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
+            // Show current mode (3D or 4D)
+            let mode_text = if viewer.is_4d_mode {
+                format!("4D Mode: {}", viewer.current_hypersolid.name())
+            } else {
+                format!("3D Mode: {}", viewer.current_solid.name())
+            };
+            draw_text(
+                &mode_text,
+                10.0,
+                80.0,
+                18.0,
+                if viewer.dark_background { WHITE } else { BLACK }
+            );
+            
+            // Debug info for 4D mode (only show in 4D mode)
+            if viewer.is_4d_mode {
+                let vertices_4d = viewer.get_4d_vertices();
+                if !vertices_4d.is_empty() {
+                    let first_4d = &vertices_4d[0];
+                    draw_text(&format!("4D: ({:.1}, {:.1}, {:.1}, {:.1})", first_4d.x, first_4d.y, first_4d.z, first_4d.w), 
+                            10.0, 100.0, 16.0, BLUE);
+                    draw_text(&format!("Vertices: {}", vertices_4d.len()), 
+                            10.0, 120.0, 16.0, GREEN);
+                }
+            }
+            
+            // Adjust Y coordinates based on whether we're in 4D mode
+            let rotation_y_start = if viewer.is_4d_mode { 140.0 } else { 100.0 };
+            
             draw_text(
                 &format!("Rotation X: {:.1}°", viewer.rotation_x.to_degrees()),
                 10.0,
-                90.0,
+                rotation_y_start,
                 18.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
@@ -856,7 +1192,7 @@ async fn main() {
             draw_text(
                 &format!("Rotation Y: {:.1}°", viewer.rotation_y.to_degrees()),
                 10.0,
-                110.0,
+                rotation_y_start + 20.0,
                 18.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
@@ -864,7 +1200,7 @@ async fn main() {
             draw_text(
                 &format!("Rotation Z: {:.1}°", viewer.rotation_z.to_degrees()),
                 10.0,
-                130.0,
+                rotation_y_start + 40.0,
                 18.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
@@ -874,7 +1210,7 @@ async fn main() {
                 draw_text(
                     "PAUSED",
                     10.0,
-                    155.0,
+                    165.0,
                     25.0,
                     RED
                 );
@@ -1052,6 +1388,18 @@ async fn main() {
         if is_key_pressed(KeyCode::S) {
             // Cycle through Platonic solids
             viewer.current_solid = viewer.current_solid.next();
+        }
+        
+        if is_key_pressed(KeyCode::H) {
+            // Toggle between 3D and 4D modes
+            viewer.is_4d_mode = !viewer.is_4d_mode;
+        }
+        
+        if is_key_pressed(KeyCode::J) {
+            // Cycle through hypersolids (only in 4D mode)
+            if viewer.is_4d_mode {
+                viewer.current_hypersolid = viewer.current_hypersolid.next();
+            }
         }
         
         // Handle button clicks
