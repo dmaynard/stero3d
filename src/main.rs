@@ -164,16 +164,16 @@ const ICOSAHEDRON_EDGES: [(usize, usize); 30] = [
 
 // Tesseract (4D hypercube) - 16 vertices, 32 edges
 const TESSERACT_VERTICES: [Vec4D; 16] = [
-    // Bottom cube (w = -2.0) - spread out more in 4D space
-    Vec4D::new(-1.5, -1.5, -1.5, -2.0), Vec4D::new(1.5, -1.5, -1.5, -2.0),
-    Vec4D::new(-1.5, 1.5, -1.5, -2.0), Vec4D::new(1.5, 1.5, -1.5, -2.0),
-    Vec4D::new(-1.5, -1.5, 1.5, -2.0), Vec4D::new(1.5, -1.5, 1.5, -2.0),
-    Vec4D::new(-1.5, 1.5, 1.5, -2.0), Vec4D::new(1.5, 1.5, 1.5, -2.0),
-    // Top cube (w = 2.0) - spread out more in 4D space
-    Vec4D::new(-1.5, -1.5, -1.5, 2.0), Vec4D::new(1.5, -1.5, -1.5, 2.0),
-    Vec4D::new(-1.5, 1.5, -1.5, 2.0), Vec4D::new(1.5, 1.5, -1.5, 2.0),
-    Vec4D::new(-1.5, -1.5, 1.5, 2.0), Vec4D::new(1.5, -1.5, 1.5, 2.0),
-    Vec4D::new(-1.5, 1.5, 1.5, 2.0), Vec4D::new(1.5, 1.5, 1.5, 2.0),
+    // Bottom cube (w = -1.0) - unit hypercube
+    Vec4D::new(-1.0, -1.0, -1.0, -1.0), Vec4D::new(1.0, -1.0, -1.0, -1.0),
+    Vec4D::new(-1.0, 1.0, -1.0, -1.0), Vec4D::new(1.0, 1.0, -1.0, -1.0),
+    Vec4D::new(-1.0, -1.0, 1.0, -1.0), Vec4D::new(1.0, -1.0, 1.0, -1.0),
+    Vec4D::new(-1.0, 1.0, 1.0, -1.0), Vec4D::new(1.0, 1.0, 1.0, -1.0),
+    // Top cube (w = 1.0) - unit hypercube
+    Vec4D::new(-1.0, -1.0, -1.0, 1.0), Vec4D::new(1.0, -1.0, -1.0, 1.0),
+    Vec4D::new(-1.0, 1.0, -1.0, 1.0), Vec4D::new(1.0, 1.0, -1.0, 1.0),
+    Vec4D::new(-1.0, -1.0, 1.0, 1.0), Vec4D::new(1.0, -1.0, 1.0, 1.0),
+    Vec4D::new(-1.0, 1.0, 1.0, 1.0), Vec4D::new(1.0, 1.0, 1.0, 1.0),
 ];
 
 const TESSERACT_EDGES: [(usize, usize); 32] = [
@@ -193,7 +193,7 @@ const FOUR_SIMPLEX_VERTICES: [Vec4D; 5] = [
     Vec4D::new(-1.0, -1.0, 1.0, 1.0),
     Vec4D::new(-1.0, 1.0, -1.0, 1.0),
     Vec4D::new(1.0, -1.0, -1.0, 1.0),
-    Vec4D::new(0.0, 0.0, 0.0, -1.5),
+    Vec4D::new(0.0, 0.0, 0.0, -1.0),
 ];
 
 const FOUR_SIMPLEX_EDGES: [(usize, usize); 10] = [
@@ -256,6 +256,7 @@ struct StereogramViewer {
     dragging_slider: Option<usize>, // None, Some(0) for X, Some(1) for Y, Some(2) for Z
     dragging_angle_slider: Option<usize>, // None, Some(0) for X angle, Some(1) for Y angle, Some(2) for Z angle
     dragging_4d_slider: Option<usize>, // None, Some(0-5) for 4D rotation planes
+    debug_printed: bool, // Flag to only print debug info once per pause
 }
 
 impl StereogramViewer {
@@ -281,7 +282,7 @@ impl StereogramViewer {
             rotation_velocity_yw: 0.0,
             rotation_velocity_zw: 0.0,
             eye_separation: 0.06, // Reduced for iPhone dimensions
-            perspective_distance: 10.0, // Initial perspective distance
+            perspective_distance: 5.0, // Much smaller perspective distance for unit objects
             is_paused: false,
             show_guides: true,
             depth_coloring: true,
@@ -299,6 +300,7 @@ impl StereogramViewer {
             dragging_slider: None, // No slider being dragged initially
             dragging_angle_slider: None, // No angle slider being dragged initially
             dragging_4d_slider: None, // No 4D slider being dragged initially
+            debug_printed: false, // No debug output printed yet
         }
     }
 
@@ -357,15 +359,14 @@ impl StereogramViewer {
         }
     }
     
-    // Project 4D vertex to 3D space using perspective projection
-    fn project_4d_to_3d(&self, vertex_4d: Vec4D, w_distance: f32) -> Vec3 {
-        // Use perspective projection from 4D to 3D
-        // The W coordinate acts like a perspective distance
-        let perspective_factor = 1.0 / (w_distance + vertex_4d.w + 1.0); // Reduced offset from 4.0 to 1.0
+    // Project 4D vertex to 3D space
+    fn project_4d_to_3d(&self, vertex_4d: Vec4D, _w_distance: f32) -> Vec3 {
+        // Use W coordinate to create proper 3D separation
+        // Spread vertices in 3D space based on their W coordinate
         Vec3::new(
-            vertex_4d.x * perspective_factor,
-            vertex_4d.y * perspective_factor,
-            vertex_4d.z * perspective_factor,
+            vertex_4d.x + vertex_4d.w * 0.2, // W affects X position
+            vertex_4d.y + vertex_4d.w * 0.2, // W affects Y position
+            vertex_4d.z + vertex_4d.w * 0.5  // W affects Z position
         )
     }
 
@@ -480,7 +481,7 @@ impl StereogramViewer {
         }
     }
 
-    fn render_stereogram(&self) {
+    fn render_stereogram(&mut self) {
         let screen_width = screen_width();
         let screen_height = screen_height();
         let half_width = screen_width / 2.0;
@@ -526,42 +527,53 @@ impl StereogramViewer {
         }
     }
     
-    fn draw_4d_hypersolid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
+    fn draw_4d_hypersolid_wireframe(&mut self, camera_offset: f32, screen_offset_x: f32) {
+        // Debug: Print vertex coordinates when paused (only once per pause)
+        let should_print_debug = self.is_paused && !self.debug_printed;
+        if should_print_debug {
+            println!("\n=== 4D VERTEX DEBUG (PAUSED) ===");
+            println!("Hypersolid: {:?}", self.current_hypersolid);
+            println!("Orthographic: {}", self.orthographic);
+            println!("Perspective Distance: {:.1}", self.perspective_distance);
+            println!("Camera Offset: {:.1}", camera_offset);
+            println!("Screen Offset X: {:.1}", screen_offset_x);
+            println!("Screen Size: {}x{}", screen_width(), screen_height());
+            self.debug_printed = true; // Mark as printed
+        }
+        
         let vertices_4d = self.get_4d_vertices();
         let edges = self.get_4d_edges();
         
-        // Debug output removed - issue identified and fixed
-        
         // Apply 4D rotations to vertices
         let mut transformed_vertices_4d = Vec::new();
-        for &vertex_4d in vertices_4d {
-            // Apply 4D rotation matrices (simplified - we'll implement proper 4D rotation later)
+        for (i, &vertex_4d) in vertices_4d.iter().enumerate() {
+            // No 4D rotation - keep vertices in their original positions for clean projection
             let transformed = vertex_4d;
             
-            // For now, apply basic rotations (this is a simplified implementation)
-            // TODO: Implement proper 4D rotation matrices
+            if should_print_debug { // Print all vertices to see what's happening
+                println!("Vertex {}: 4D original ({:.1}, {:.1}, {:.1}, {:.1}) -> 4D transformed ({:.1}, {:.1}, {:.1}, {:.1})", 
+                    i, vertex_4d.x, vertex_4d.y, vertex_4d.z, vertex_4d.w,
+                    transformed.x, transformed.y, transformed.z, transformed.w);
+            }
+            
             transformed_vertices_4d.push(transformed);
         }
         
         // Project 4D vertices to 3D space
-        let w_distance = self.perspective_distance;
+        // Use a smaller distance for 4D objects to prevent clustering
+        let w_distance = if self.orthographic { 1.0 } else { 1.5 }; // Even smaller for perspective mode
         let mut vertices_3d = Vec::new();
         for (i, vertex_4d) in transformed_vertices_4d.iter().enumerate() {
             let vertex_3d = self.project_4d_to_3d(*vertex_4d, w_distance);
+            if should_print_debug { // Print all vertices to see what's happening
+                println!("Vertex {}: 4D->3D projected ({:.1}, {:.1}, {:.1})", 
+                    i, vertex_3d.x, vertex_3d.y, vertex_3d.z);
+            }
             vertices_3d.push(vertex_3d);
             
         }
         
-        // Now apply 3D transformations and render as before
-        // Different hypersolids need different scales
-        let base_scale = if self.orthographic { 300.0 } else { 300.0 };
-        let scale = match self.current_hypersolid {
-            Hypersolid::Tesseract => base_scale,           // Good at current scale
-            Hypersolid::FourSimplex => base_scale * 2.0,   // Make 4-simplex larger
-            Hypersolid::FourOrthoplex => base_scale * 2.5, // Make 4-orthoplex even larger
-        };
-        
-        // Apply 3D rotation to the projected vertices
+        // Apply 3D rotation to the projected vertices (no scaling yet)
         let rot_x_matrix = Mat4::from_rotation_x(self.rotation_x);
         let rot_y_matrix = Mat4::from_rotation_y(self.rotation_y);
         let rot_z_matrix = Mat4::from_rotation_z(self.rotation_z);
@@ -569,13 +581,45 @@ impl StereogramViewer {
         
         let mut transformed_vertices = Vec::new();
         for (i, vertex_3d) in vertices_3d.iter().enumerate() {
-            let scaled_vertex = *vertex_3d * scale;
-            let rotated_vertex = combined_rotation.transform_point3(scaled_vertex);
+            let rotated_vertex = combined_rotation.transform_point3(*vertex_3d);
+            if should_print_debug { // Print all vertices to see what's happening
+                println!("Vertex {}: 3D rotated ({:.1}, {:.1}, {:.1})", 
+                    i, rotated_vertex.x, rotated_vertex.y, rotated_vertex.z);
+            }
             transformed_vertices.push(rotated_vertex);
             
         }
         
-        // Calculate 2D screen positions
+        // Calculate 2D screen positions with proper scaling
+        // Scale to fit 80% of screen width and center the object
+        let screen_width = screen_width();
+        let screen_height = screen_height();
+        let target_width = screen_width * 0.8; // 80% of screen width (much larger)
+        let half_screen_width = screen_width * 0.5;
+        let viewport_center_x = screen_offset_x + half_screen_width * 0.5; // Center in the quarter-screen viewport
+        let viewport_center_y = screen_height * 0.5;
+        
+        // Find the bounding box of the rotated vertices to determine scale
+        let mut min_x = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut min_y = f32::MAX;
+        let mut max_y = f32::MIN;
+        for vertex in &transformed_vertices {
+            min_x = min_x.min(vertex.x);
+            max_x = max_x.max(vertex.x);
+            min_y = min_y.min(vertex.y);
+            max_y = max_y.max(vertex.y);
+        }
+        let object_width = max_x - min_x;
+        let object_height = max_y - min_y;
+        let object_size = object_width.max(object_height);
+        let scale = if object_size > 0.0 { target_width / object_size } else { 1.0 };
+        
+        if should_print_debug {
+            println!("Scale: {:.3}, Object size: {:.3}, Target width: {:.1}", scale, object_size, target_width);
+            println!("Viewport center: ({:.1}, {:.1})", viewport_center_x, viewport_center_y);
+        }
+        
         let mut edge_data: Vec<(f32, Vec2, Vec2, Color)> = Vec::new();
         for &(start_idx, end_idx) in edges {
             let start_3d = transformed_vertices[start_idx];
@@ -584,29 +628,46 @@ impl StereogramViewer {
             
             let start_2d = if self.orthographic {
                 Vec2::new(
-                    screen_offset_x + start_3d.x + camera_offset + screen_width() * 0.25, // Center in viewport
-                    screen_height() * 0.5 - start_3d.y, // Invert Y to center properly
+                    viewport_center_x + start_3d.x * scale + camera_offset,
+                    viewport_center_y - start_3d.y * scale, // Invert Y to center properly
                 )
             } else {
-                let perspective_factor = 1.0 / (self.perspective_distance + start_3d.z);
+                // Use perspective distance for 4D objects
+                let perspective_distance = self.perspective_distance;
+                let perspective_factor = 1.0 / (perspective_distance + start_3d.z);
                 Vec2::new(
-                    screen_offset_x + start_3d.x * perspective_factor + camera_offset + screen_width() * 0.25, // Center in viewport
-                    screen_height() * 0.5 - start_3d.y * perspective_factor, // Invert Y to center properly
+                    viewport_center_x + start_3d.x * scale * perspective_factor + camera_offset,
+                    viewport_center_y - start_3d.y * scale * perspective_factor, // Invert Y to center properly
                 )
             };
             
             let end_2d = if self.orthographic {
                 Vec2::new(
-                    screen_offset_x + end_3d.x + camera_offset + screen_width() * 0.25, // Center in viewport
-                    screen_height() * 0.5 - end_3d.y, // Invert Y to center properly
+                    viewport_center_x + end_3d.x * scale + camera_offset,
+                    viewport_center_y - end_3d.y * scale, // Invert Y to center properly
                 )
             } else {
-                let perspective_factor = 1.0 / (self.perspective_distance + end_3d.z);
+                // Use perspective distance for 4D objects
+                let perspective_distance = self.perspective_distance;
+                let perspective_factor = 1.0 / (perspective_distance + end_3d.z);
                 Vec2::new(
-                    screen_offset_x + end_3d.x * perspective_factor + camera_offset + screen_width() * 0.25, // Center in viewport
-                    screen_height() * 0.5 - end_3d.y * perspective_factor, // Invert Y to center properly
+                    viewport_center_x + end_3d.x * scale * perspective_factor + camera_offset,
+                    viewport_center_y - end_3d.y * scale * perspective_factor, // Invert Y to center properly
                 )
             };
+            
+            // Debug: Print 2D screen coordinates for first few edges when paused
+            if should_print_debug && edge_data.len() < 3 {
+                println!("Edge {}: 3D start ({:.1}, {:.1}, {:.1}) -> 2D start ({:.1}, {:.1})", 
+                    edge_data.len(), start_3d.x, start_3d.y, start_3d.z, start_2d.x, start_2d.y);
+                println!("Edge {}: 3D end ({:.1}, {:.1}, {:.1}) -> 2D end ({:.1}, {:.1})", 
+                    edge_data.len(), end_3d.x, end_3d.y, end_3d.z, end_2d.x, end_2d.y);
+                if !self.orthographic {
+                    let perspective_factor_start = 1.0 / (self.perspective_distance + start_3d.z);
+                    let perspective_factor_end = 1.0 / (self.perspective_distance + end_3d.z);
+                    println!("  Perspective factors: start={:.3}, end={:.3}", perspective_factor_start, perspective_factor_end);
+                }
+            }
             
             
             let avg_z = (start_3d.z + end_3d.z) / 2.0;
@@ -1358,6 +1419,10 @@ async fn main() {
         if is_key_pressed(KeyCode::Space) {
             // Toggle pause state
             viewer.is_paused = !viewer.is_paused;
+            // Reset debug flag when unpausing so we can print again on next pause
+            if !viewer.is_paused {
+                viewer.debug_printed = false;
+            }
         }
         
         if is_key_pressed(KeyCode::G) {
