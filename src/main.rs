@@ -772,12 +772,6 @@ impl StereogramViewer {
             draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, *wire_color);
         }
         
-        // Debug: Draw vertex positions as small circles
-        for (i, (_, vertex_2d, _, _)) in edge_data.iter().enumerate() {
-            draw_circle(vertex_2d.x, vertex_2d.y, 3.0, RED);
-            // Draw vertex index as text
-            draw_text(&format!("{}", i), vertex_2d.x + 5.0, vertex_2d.y - 5.0, 12.0, WHITE);
-        }
         
         // Debug info moved to main UI section to avoid duplicate drawing
     }
@@ -1222,7 +1216,7 @@ async fn main() {
                     );
                     
                     // Slider handle (normalize velocity to slider range)
-                    let handle_x = velocity_slider_x + (rotation_velocity + 0.05) / 0.10 * slider_width;
+                    let handle_x = velocity_slider_x + (rotation_velocity + 0.02) / 0.04 * slider_width;
                     draw_rectangle(
                         handle_x - 5.0,
                         y_pos + 2.0,
@@ -1286,7 +1280,7 @@ async fn main() {
             );
             
             // Slider handle
-            let x_handle_x = slider_x + (viewer.rotation_velocity_x + 0.05) / 0.10 * slider_width;
+            let x_handle_x = slider_x + (viewer.rotation_velocity_x + 0.02) / 0.04 * slider_width;
             draw_rectangle(
                 x_handle_x - 5.0,
                 slider_y + 2.0,
@@ -1345,7 +1339,7 @@ async fn main() {
                 if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
             );
             
-            let y_handle_x = slider_x + (viewer.rotation_velocity_y + 0.05) / 0.10 * slider_width;
+            let y_handle_x = slider_x + (viewer.rotation_velocity_y + 0.02) / 0.04 * slider_width;
             draw_rectangle(
                 y_handle_x - 5.0,
                 slider_y + slider_spacing + 2.0,
@@ -1404,7 +1398,7 @@ async fn main() {
                 if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
             );
             
-            let z_handle_x = slider_x + (viewer.rotation_velocity_z + 0.05) / 0.10 * slider_width;
+            let z_handle_x = slider_x + (viewer.rotation_velocity_z + 0.02) / 0.04 * slider_width;
             draw_rectangle(
                 z_handle_x - 5.0,
                 slider_y + slider_spacing * 2.0 + 2.0,
@@ -1423,6 +1417,20 @@ async fn main() {
                 if viewer.dark_background { Color::new(0.7, 0.7, 0.7, 1.0) } else { Color::new(0.4, 0.4, 0.4, 1.0) }
             );
         }
+        
+        // Mode and shape label below buttons - always visible
+        let mode_text = if viewer.is_4d_mode {
+            format!("4D {}", viewer.current_hypersolid.name())
+        } else {
+            format!("3D {}", viewer.current_solid.name())
+        };
+        draw_text(
+            &mode_text,
+            10.0,
+            60.0, // Moved down below the buttons (which are at y=10-50)
+            20.0,
+            if viewer.dark_background { WHITE } else { BLACK }
+        );
         
         if viewer.show_ui {
             draw_text(
@@ -1817,13 +1825,13 @@ async fn main() {
             };
             
             let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
-            // Increased range: -0.05 to 0.05 with discrete steps
-            let raw_velocity = (normalized * 0.10) - 0.05; // Range: -0.05 to 0.05
+            // Reduced range: -0.02 to 0.02 with larger discrete steps for easier centering
+            let raw_velocity = (normalized * 0.04) - 0.02; // Range: -0.02 to 0.02
             
-            // Create discrete steps: -0.05, -0.045, -0.04, ..., 0.00, ..., 0.04, 0.045, 0.05
-            let step_size = 0.005;
+            // Create discrete steps: -0.02, -0.015, -0.01, -0.005, 0.00, 0.005, 0.01, 0.015, 0.02
+            let step_size = 0.005; // Larger step size for easier centering
             let velocity = (raw_velocity / step_size).round() * step_size;
-            let velocity = velocity.clamp(-0.05, 0.05);
+            let velocity = velocity.clamp(-0.02, 0.02);
             
             if viewer.is_4d_mode {
                 // 4D velocity sliders
