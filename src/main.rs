@@ -359,6 +359,61 @@ impl StereogramViewer {
         }
     }
     
+    // Apply 4D rotations in all 6 rotation planes
+    fn apply_4d_rotations(&self, vertex: Vec4D) -> Vec4D {
+        let mut result = vertex;
+        
+        // XY plane rotation
+        let xy_cos = self.rotation_xy.cos();
+        let xy_sin = self.rotation_xy.sin();
+        let x = result.x;
+        let y = result.y;
+        result.x = x * xy_cos - y * xy_sin;
+        result.y = x * xy_sin + y * xy_cos;
+        
+        // XZ plane rotation
+        let xz_cos = self.rotation_xz.cos();
+        let xz_sin = self.rotation_xz.sin();
+        let x = result.x;
+        let z = result.z;
+        result.x = x * xz_cos - z * xz_sin;
+        result.z = x * xz_sin + z * xz_cos;
+        
+        // YZ plane rotation
+        let yz_cos = self.rotation_yz.cos();
+        let yz_sin = self.rotation_yz.sin();
+        let y = result.y;
+        let z = result.z;
+        result.y = y * yz_cos - z * yz_sin;
+        result.z = y * yz_sin + z * yz_cos;
+        
+        // XW plane rotation
+        let xw_cos = self.rotation_xw.cos();
+        let xw_sin = self.rotation_xw.sin();
+        let x = result.x;
+        let w = result.w;
+        result.x = x * xw_cos - w * xw_sin;
+        result.w = x * xw_sin + w * xw_cos;
+        
+        // YW plane rotation
+        let yw_cos = self.rotation_yw.cos();
+        let yw_sin = self.rotation_yw.sin();
+        let y = result.y;
+        let w = result.w;
+        result.y = y * yw_cos - w * yw_sin;
+        result.w = y * yw_sin + w * yw_cos;
+        
+        // ZW plane rotation
+        let zw_cos = self.rotation_zw.cos();
+        let zw_sin = self.rotation_zw.sin();
+        let z = result.z;
+        let w = result.w;
+        result.z = z * zw_cos - w * zw_sin;
+        result.w = z * zw_sin + w * zw_cos;
+        
+        result
+    }
+
     // Project 4D vertex to 3D space
     fn project_4d_to_3d(&self, vertex_4d: Vec4D, _w_distance: f32) -> Vec3 {
         // Use W coordinate to create proper 3D separation
@@ -547,8 +602,8 @@ impl StereogramViewer {
         // Apply 4D rotations to vertices
         let mut transformed_vertices_4d = Vec::new();
         for (i, &vertex_4d) in vertices_4d.iter().enumerate() {
-            // No 4D rotation - keep vertices in their original positions for clean projection
-            let transformed = vertex_4d;
+            // Apply 4D rotations in all 6 planes
+            let transformed = self.apply_4d_rotations(vertex_4d);
             
             if should_print_debug { // Print all vertices to see what's happening
                 println!("Vertex {}: 4D original ({:.1}, {:.1}, {:.1}, {:.1}) -> 4D transformed ({:.1}, {:.1}, {:.1}, {:.1})", 
@@ -591,10 +646,10 @@ impl StereogramViewer {
         }
         
         // Calculate 2D screen positions with proper scaling
-        // Scale to fit 80% of screen width and center the object
+        // Scale to fit 25% of screen width and center the object
         let screen_width = screen_width();
         let screen_height = screen_height();
-        let target_width = screen_width * 0.8; // 80% of screen width (much larger)
+        let target_width = screen_width * 0.25; // 25% of screen width for proper sizing
         let half_screen_width = screen_width * 0.5;
         let viewport_center_x = screen_offset_x + half_screen_width * 0.5; // Center in the quarter-screen viewport
         let viewport_center_y = screen_height * 0.5;
@@ -604,12 +659,28 @@ impl StereogramViewer {
         let mut max_x = f32::MIN;
         let mut min_y = f32::MAX;
         let mut max_y = f32::MIN;
-        for vertex in &transformed_vertices {
-            min_x = min_x.min(vertex.x);
-            max_x = max_x.max(vertex.x);
-            min_y = min_y.min(vertex.y);
-            max_y = max_y.max(vertex.y);
+        
+        if self.orthographic {
+            // For orthographic, use direct 3D coordinates
+            for vertex in &transformed_vertices {
+                min_x = min_x.min(vertex.x);
+                max_x = max_x.max(vertex.x);
+                min_y = min_y.min(vertex.y);
+                max_y = max_y.max(vertex.y);
+            }
+        } else {
+            // For perspective, calculate projected coordinates to get accurate size
+            for vertex in &transformed_vertices {
+                let perspective_factor = 1.0 / (self.perspective_distance + vertex.z);
+                let proj_x = vertex.x * perspective_factor;
+                let proj_y = vertex.y * perspective_factor;
+                min_x = min_x.min(proj_x);
+                max_x = max_x.max(proj_x);
+                min_y = min_y.min(proj_y);
+                max_y = max_y.max(proj_y);
+            }
         }
+        
         let object_width = max_x - min_x;
         let object_height = max_y - min_y;
         let object_size = object_width.max(object_height);
@@ -629,7 +700,7 @@ impl StereogramViewer {
             let start_2d = if self.orthographic {
                 Vec2::new(
                     viewport_center_x + start_3d.x * scale + camera_offset,
-                    viewport_center_y - start_3d.y * scale, // Invert Y to center properly
+                    viewport_center_y - start_3d.y * scale - start_3d.z * scale * 0.5, // Use Z for depth separation
                 )
             } else {
                 // Use perspective distance for 4D objects
@@ -644,7 +715,7 @@ impl StereogramViewer {
             let end_2d = if self.orthographic {
                 Vec2::new(
                     viewport_center_x + end_3d.x * scale + camera_offset,
-                    viewport_center_y - end_3d.y * scale, // Invert Y to center properly
+                    viewport_center_y - end_3d.y * scale - end_3d.z * scale * 0.5, // Use Z for depth separation
                 )
             } else {
                 // Use perspective distance for 4D objects
@@ -795,8 +866,10 @@ async fn main() {
         );
         
         // 3D controls button text "3D"
+        // Draw "3D"/"4D" button with dynamic label
+        let button_label = if viewer.is_4d_mode { "4D" } else { "3D" };
         draw_text(
-            "3D",
+            button_label,
             controls_button_x + 4.0,
             controls_button_y + 22.0,
             16.0,
@@ -830,8 +903,9 @@ async fn main() {
             );
             
             // Panel title
+            let panel_title = if viewer.is_4d_mode { "4D Rotation Controls" } else { "3D Rotation Controls" };
             draw_text(
-                "3D Rotation Controls",
+                panel_title,
                 panel_x + 10.0,
                 panel_y + 25.0,
                 20.0,
@@ -841,9 +915,80 @@ async fn main() {
             // Rotation angle sliders (0-360 degrees)
             let angle_slider_x = panel_x + 20.0;
             let angle_slider_y = panel_y + 50.0;
-            let angle_slider_width = 200.0;
+            let angle_slider_width = 120.0; // Reduced width to fit in left column
             let angle_slider_height = 20.0;
             let angle_slider_spacing = 35.0;
+            
+            if viewer.is_4d_mode {
+                // Draw 4D rotation sliders in two columns
+                let rotation_angles = [
+                    (viewer.rotation_xy, "XY"),
+                    (viewer.rotation_xz, "XZ"),
+                    (viewer.rotation_yz, "YZ"),
+                    (viewer.rotation_xw, "XW"),
+                    (viewer.rotation_yw, "YW"),
+                    (viewer.rotation_zw, "ZW"),
+                ];
+                
+                // Left column: Angle sliders
+                for (i, (rotation_angle, label)) in rotation_angles.iter().enumerate() {
+                    let y_pos = angle_slider_y + (i as f32) * angle_slider_spacing;
+                    
+                    // Label
+                    draw_text(
+                        label,
+                        angle_slider_x,
+                        y_pos - 5.0,
+                        14.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    
+                    // Degree markers
+                    draw_text(
+                        "0°",
+                        angle_slider_x - 15.0,
+                        y_pos + 15.0,
+                        12.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    draw_text(
+                        "180°",
+                        angle_slider_x + angle_slider_width / 2.0 - 15.0,
+                        y_pos + 15.0,
+                        12.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    draw_text(
+                        "360°",
+                        angle_slider_x + angle_slider_width + 5.0,
+                        y_pos + 15.0,
+                        12.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    
+                    // Slider track
+                    draw_rectangle(
+                        angle_slider_x,
+                        y_pos,
+                        angle_slider_width,
+                        angle_slider_height,
+                        if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+                    );
+                    
+                    // Slider handle (normalize to 0-360 degrees)
+                    let degrees = rotation_angle.to_degrees() % 360.0;
+                    let normalized = if degrees < 0.0 { degrees + 360.0 } else { degrees };
+                    let handle_x = angle_slider_x + (normalized / 360.0) * angle_slider_width;
+                    draw_rectangle(
+                        handle_x - 5.0,
+                        y_pos + 2.0,
+                        10.0,
+                        angle_slider_height - 4.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                }
+            } else {
+                // Draw 3D rotation sliders (X, Y, Z)
             
             // X angle slider
             draw_text(
@@ -999,13 +1144,95 @@ async fn main() {
                 angle_slider_height - 4.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
+            } // End of 3D rotation sliders
             
             // Velocity sliders
             let slider_x = panel_x + 20.0;
             let slider_y = panel_y + 180.0;
-            let slider_width = 200.0;
+            let slider_width = 120.0; // Reduced width to match angle sliders
             let slider_height = 20.0;
             let slider_spacing = 35.0;
+            
+            if viewer.is_4d_mode {
+                // Right column: Velocity sliders
+                let rotation_velocities = [
+                    (viewer.rotation_velocity_xy, "dXY"),
+                    (viewer.rotation_velocity_xz, "dXZ"),
+                    (viewer.rotation_velocity_yz, "dYZ"),
+                    (viewer.rotation_velocity_xw, "dXW"),
+                    (viewer.rotation_velocity_yw, "dYW"),
+                    (viewer.rotation_velocity_zw, "dZW"),
+                ];
+                
+                // Position velocity sliders in right column
+                let velocity_slider_x = panel_x + 150.0; // Right column position, closer to center
+                
+                for (i, (rotation_velocity, label)) in rotation_velocities.iter().enumerate() {
+                    let y_pos = angle_slider_y + (i as f32) * angle_slider_spacing; // Same Y as angle sliders
+                    
+                    // Label
+                    draw_text(
+                        label,
+                        velocity_slider_x,
+                        y_pos - 5.0,
+                        14.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    
+                    // Slider labels (-, 0, +)
+                    draw_text(
+                        "-",
+                        velocity_slider_x - 10.0,
+                        y_pos + 15.0,
+                        12.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    draw_text(
+                        "0",
+                        velocity_slider_x + slider_width / 2.0 - 3.0,
+                        y_pos + 15.0,
+                        12.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    draw_text(
+                        "+",
+                        velocity_slider_x + slider_width + 5.0,
+                        y_pos + 15.0,
+                        12.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                    
+                    // Slider track
+                    draw_rectangle(
+                        velocity_slider_x,
+                        y_pos,
+                        slider_width,
+                        slider_height,
+                        if viewer.dark_background { Color::new(0.3, 0.3, 0.3, 1.0) } else { Color::new(0.7, 0.7, 0.7, 1.0) }
+                    );
+                    
+                    // Center line on slider
+                    draw_line(
+                        velocity_slider_x + slider_width / 2.0,
+                        y_pos,
+                        velocity_slider_x + slider_width / 2.0,
+                        y_pos + slider_height,
+                        1.0,
+                        if viewer.dark_background { Color::new(0.5, 0.5, 0.5, 1.0) } else { Color::new(0.3, 0.3, 0.3, 1.0) }
+                    );
+                    
+                    // Slider handle (normalize velocity to slider range)
+                    let handle_x = velocity_slider_x + (rotation_velocity + 0.05) / 0.10 * slider_width;
+                    draw_rectangle(
+                        handle_x - 5.0,
+                        y_pos + 2.0,
+                        10.0,
+                        slider_height - 4.0,
+                        if viewer.dark_background { WHITE } else { BLACK }
+                    );
+                }
+            } else {
+                // Draw 3D velocity sliders (X, Y, Z)
             
             // X velocity slider
             draw_text(
@@ -1185,6 +1412,7 @@ async fn main() {
                 slider_height - 4.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
+            } // End of 3D velocity sliders
             
             // Instructions
             draw_text(
@@ -1239,32 +1467,46 @@ async fn main() {
                 }
             }
             
-            // Adjust Y coordinates based on whether we're in 4D mode
+            // Show rotation angles based on mode
             let rotation_y_start = if viewer.is_4d_mode { 140.0 } else { 100.0 };
             
-            draw_text(
-                &format!("Rotation X: {:.1}°", viewer.rotation_x.to_degrees()),
-                10.0,
-                rotation_y_start,
-                18.0,
-                if viewer.dark_background { WHITE } else { BLACK }
-            );
+            if viewer.is_4d_mode {
+                // Show 4D rotations
+                let color = if viewer.dark_background { WHITE } else { BLACK };
+                draw_text("4D Rotations:", 10.0, rotation_y_start, 16.0, color);
+                draw_text(&format!("XY: {:.1}°", viewer.rotation_xy.to_degrees()), 10.0, rotation_y_start + 20.0, 16.0, color);
+                draw_text(&format!("XZ: {:.1}°", viewer.rotation_xz.to_degrees()), 10.0, rotation_y_start + 40.0, 16.0, color);
+                draw_text(&format!("YZ: {:.1}°", viewer.rotation_yz.to_degrees()), 10.0, rotation_y_start + 60.0, 16.0, color);
+                draw_text(&format!("XW: {:.1}°", viewer.rotation_xw.to_degrees()), 10.0, rotation_y_start + 80.0, 16.0, color);
+                draw_text(&format!("YW: {:.1}°", viewer.rotation_yw.to_degrees()), 10.0, rotation_y_start + 100.0, 16.0, color);
+                draw_text(&format!("ZW: {:.1}°", viewer.rotation_zw.to_degrees()), 10.0, rotation_y_start + 120.0, 16.0, color);
+            } else {
+                // Show 3D rotations
+                draw_text(
+                    &format!("Rotation X: {:.1}°", viewer.rotation_x.to_degrees()),
+                    10.0,
+                    rotation_y_start,
+                    18.0,
+                    if viewer.dark_background { WHITE } else { BLACK }
+                );
+                
+                draw_text(
+                    &format!("Rotation Y: {:.1}°", viewer.rotation_y.to_degrees()),
+                    10.0,
+                    rotation_y_start + 20.0,
+                    18.0,
+                    if viewer.dark_background { WHITE } else { BLACK }
+                );
+                
+                draw_text(
+                    &format!("Rotation Z: {:.1}°", viewer.rotation_z.to_degrees()),
+                    10.0,
+                    rotation_y_start + 40.0,
+                    18.0,
+                    if viewer.dark_background { WHITE } else { BLACK }
+                );
+            }
             
-            draw_text(
-                &format!("Rotation Y: {:.1}°", viewer.rotation_y.to_degrees()),
-                10.0,
-                rotation_y_start + 20.0,
-                18.0,
-                if viewer.dark_background { WHITE } else { BLACK }
-            );
-            
-            draw_text(
-                &format!("Rotation Z: {:.1}°", viewer.rotation_z.to_degrees()),
-                10.0,
-                rotation_y_start + 40.0,
-                18.0,
-                if viewer.dark_background { WHITE } else { BLACK }
-            );
             
             // Show pause status
             if viewer.is_paused {
@@ -1504,28 +1746,49 @@ async fn main() {
                 let angle_slider_y = panel_y + 50.0;
                 let angle_slider_spacing = 35.0;
                 
-                if mouse_pos.0 >= slider_x && mouse_pos.0 <= slider_x + slider_width {
-                    // X angle slider
+                if viewer.is_4d_mode {
+                    // 4D mode: Check left column (angle sliders) and right column (velocity sliders)
+                    let velocity_slider_x = panel_x + 150.0; // Right column position
+                    
+                    // Check left column for angle sliders
+                    if mouse_pos.0 >= slider_x && mouse_pos.0 <= slider_x + slider_width {
+                        for i in 0..6 {
+                            let y_pos = angle_slider_y + (i as f32) * angle_slider_spacing;
+                            if mouse_pos.1 >= y_pos && mouse_pos.1 <= y_pos + slider_height {
+                                viewer.dragging_4d_slider = Some(i);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Check right column for velocity sliders
+                    if mouse_pos.0 >= velocity_slider_x && mouse_pos.0 <= velocity_slider_x + slider_width {
+                        for i in 0..6 {
+                            let y_pos = angle_slider_y + (i as f32) * angle_slider_spacing;
+                            if mouse_pos.1 >= y_pos && mouse_pos.1 <= y_pos + slider_height {
+                                viewer.dragging_slider = Some(i);
+                                break;
+                            }
+                        }
+                    }
+                } else if mouse_pos.0 >= slider_x && mouse_pos.0 <= slider_x + slider_width {
+                    // 3D mode: Check for 3 angle sliders (X, Y, Z)
                     if mouse_pos.1 >= angle_slider_y && mouse_pos.1 <= angle_slider_y + slider_height {
                         viewer.dragging_angle_slider = Some(0);
                     }
-                    // Y angle slider
                     else if mouse_pos.1 >= angle_slider_y + angle_slider_spacing && mouse_pos.1 <= angle_slider_y + angle_slider_spacing + slider_height {
                         viewer.dragging_angle_slider = Some(1);
                     }
-                    // Z angle slider
                     else if mouse_pos.1 >= angle_slider_y + angle_slider_spacing * 2.0 && mouse_pos.1 <= angle_slider_y + angle_slider_spacing * 2.0 + slider_height {
                         viewer.dragging_angle_slider = Some(2);
                     }
-                    // X velocity slider
+                    // Check for 3 velocity sliders (X, Y, Z)
                     else if mouse_pos.1 >= slider_y && mouse_pos.1 <= slider_y + slider_height {
                         viewer.dragging_slider = Some(0);
                     }
-                    // Y velocity slider
                     else if mouse_pos.1 >= slider_y + slider_spacing && mouse_pos.1 <= slider_y + slider_spacing + slider_height {
                         viewer.dragging_slider = Some(1);
                     }
-                    // Z velocity slider
                     else if mouse_pos.1 >= slider_y + slider_spacing * 2.0 && mouse_pos.1 <= slider_y + slider_spacing * 2.0 + slider_height {
                         viewer.dragging_slider = Some(2);
                     }
@@ -1537,14 +1800,21 @@ async fn main() {
         if is_mouse_button_released(MouseButton::Left) {
             viewer.dragging_slider = None;
             viewer.dragging_angle_slider = None;
+            viewer.dragging_4d_slider = None;
         }
         
         // Handle slider dragging
         if let Some(slider_index) = viewer.dragging_slider {
             let mouse_pos = mouse_position();
             let panel_x = 10.0;
-            let slider_x = panel_x + 20.0;
-            let slider_width = 200.0;
+            let slider_width = 120.0; // Match the reduced slider width
+            
+            // Use appropriate X position based on mode
+            let slider_x = if viewer.is_4d_mode {
+                panel_x + 150.0 // Right column for 4D velocity sliders
+            } else {
+                panel_x + 20.0  // Left column for 3D velocity sliders
+            };
             
             let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
             // Increased range: -0.05 to 0.05 with discrete steps
@@ -1555,11 +1825,25 @@ async fn main() {
             let velocity = (raw_velocity / step_size).round() * step_size;
             let velocity = velocity.clamp(-0.05, 0.05);
             
-            match slider_index {
-                0 => viewer.rotation_velocity_x = velocity,
-                1 => viewer.rotation_velocity_y = velocity,
-                2 => viewer.rotation_velocity_z = velocity,
-                _ => {}
+            if viewer.is_4d_mode {
+                // 4D velocity sliders
+                match slider_index {
+                    0 => viewer.rotation_velocity_xy = velocity,
+                    1 => viewer.rotation_velocity_xz = velocity,
+                    2 => viewer.rotation_velocity_yz = velocity,
+                    3 => viewer.rotation_velocity_xw = velocity,
+                    4 => viewer.rotation_velocity_yw = velocity,
+                    5 => viewer.rotation_velocity_zw = velocity,
+                    _ => {}
+                }
+            } else {
+                // 3D velocity sliders
+                match slider_index {
+                    0 => viewer.rotation_velocity_x = velocity,
+                    1 => viewer.rotation_velocity_y = velocity,
+                    2 => viewer.rotation_velocity_z = velocity,
+                    _ => {}
+                }
             }
         }
         
@@ -1578,6 +1862,28 @@ async fn main() {
                 0 => viewer.rotation_x = radians,
                 1 => viewer.rotation_y = radians,
                 2 => viewer.rotation_z = radians,
+                _ => {}
+            }
+        }
+        
+        // Handle 4D angle slider dragging
+        if let Some(angle_slider_index) = viewer.dragging_4d_slider {
+            let mouse_pos = mouse_position();
+            let panel_x = 10.0;
+            let slider_x = panel_x + 20.0;
+            let slider_width = 200.0;
+            
+            let normalized = ((mouse_pos.0 - slider_x) / slider_width).clamp(0.0, 1.0);
+            let degrees = normalized * 360.0;
+            let radians = degrees.to_radians();
+            
+            match angle_slider_index {
+                0 => viewer.rotation_xy = radians,
+                1 => viewer.rotation_xz = radians,
+                2 => viewer.rotation_yz = radians,
+                3 => viewer.rotation_xw = radians,
+                4 => viewer.rotation_yw = radians,
+                5 => viewer.rotation_zw = radians,
                 _ => {}
             }
         }
