@@ -245,6 +245,7 @@ struct StereogramViewer {
     is_paused: bool,
     show_guides: bool,
     depth_coloring: bool,
+    w_depth_coloring: bool,
     show_ui: bool,
     dark_background: bool,
     orthographic: bool,
@@ -286,6 +287,7 @@ impl StereogramViewer {
             is_paused: false,
             show_guides: true,
             depth_coloring: true,
+            w_depth_coloring: false,
             #[cfg(target_arch = "wasm32")]
             show_ui: false, // Web users see HTML instructions, so hide UI by default
             #[cfg(not(target_arch = "wasm32"))]
@@ -691,7 +693,7 @@ impl StereogramViewer {
             println!("Viewport center: ({:.1}, {:.1})", viewport_center_x, viewport_center_y);
         }
         
-        let mut edge_data: Vec<(f32, Vec2, Vec2, Color)> = Vec::new();
+        let mut edge_data: Vec<(f32, f32, Vec2, Vec2, Color)> = Vec::new(); // (avg_z, avg_w, start_2d, end_2d, color)
         for &(start_idx, end_idx) in edges {
             let start_3d = transformed_vertices[start_idx];
             let end_3d = transformed_vertices[end_idx];
@@ -743,33 +745,149 @@ impl StereogramViewer {
             
             let avg_z = (start_3d.z + end_3d.z) / 2.0;
             
-            let wire_color = if self.depth_coloring {
-                let min_z = -2.0;
-                let max_z = 2.0;
-                let intensity = ((max_z - avg_z) / (max_z - min_z)).clamp(0.2, 1.0);
-                let base_color = if self.dark_background {
-                    Color::new(0.8, 0.8, 0.8, 1.0) // Light gray for dark background
-                } else {
-                    Color::new(0.2, 0.2, 0.2, 1.0) // Dark gray for light background
-                };
-                Color::new(base_color.r * intensity, base_color.g * intensity, base_color.b * intensity, 1.0)
-            } else {
-                if self.dark_background {
-                    Color::new(0.8, 0.8, 0.8, 1.0) // Light gray for dark background
-                } else {
-                    Color::new(0.2, 0.2, 0.2, 1.0) // Dark gray for light background
-                }
-            };
+            // Calculate average W coordinate for W-depth coloring
+            let start_w = transformed_vertices_4d[start_idx].w;
+            let end_w = transformed_vertices_4d[end_idx].w;
+            let avg_w = (start_w + end_w) / 2.0;
             
-            edge_data.push((avg_z, start_2d, end_2d, wire_color));
+            // Store edge data without color - color will be calculated later
+            edge_data.push((avg_z, avg_w, start_2d, end_2d, WHITE)); // Placeholder color
+        }
+        
+        // Calculate Z range once per frame for consistent depth coloring
+        let mut frame_min_z = f32::MAX;
+        let mut frame_max_z = f32::MIN;
+        for (avg_z, _, _, _, _) in &edge_data {
+            frame_min_z = frame_min_z.min(*avg_z);
+            frame_max_z = frame_max_z.max(*avg_z);
+        }
+        
+        // Debug: Print frame Z range
+        if should_print_debug {
+            println!("Frame Z range: {:.3} to {:.3}", frame_min_z, frame_max_z);
         }
         
         // Sort edges by depth (front to back)
         edge_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         
-        // Draw edges
-        for (_, start_2d, end_2d, wire_color) in &edge_data {
-            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, *wire_color);
+        // Calculate W range for W-depth coloring
+        let mut frame_min_w = f32::MAX;
+        let mut frame_max_w = f32::MIN;
+        for (_, avg_w, _, _, _) in &edge_data {
+            frame_min_w = frame_min_w.min(*avg_w);
+            frame_max_w = frame_max_w.max(*avg_w);
+        }
+        
+        // Debug: Print frame W range
+        if should_print_debug {
+            println!("Frame W range: {:.3} to {:.3}", frame_min_w, frame_max_w);
+        }
+        
+        // Draw edges with improved depth coloring
+        for (avg_z, avg_w, start_2d, end_2d, _) in &edge_data {
+            let wire_color = if self.w_depth_coloring {
+                // Use W coordinate for 4th dimension coloring
+                let w_range = frame_max_w - frame_min_w;
+                let normalized_w = if w_range > 0.001 {
+                    (avg_w - frame_min_w) / w_range  // Higher W = higher normalized_w
+                } else {
+                    0.5 // Default to middle if no range
+                };
+                
+                // Debug: Print normalized W values for first few edges
+                if should_print_debug && edge_data.len() < 5 {
+                    println!("Edge {}: avg_w={:.3}, normalized_w={:.3}", edge_data.len(), avg_w, normalized_w);
+                }
+                
+                // Create W-based color bands (different from Z coloring)
+                if self.dark_background {
+                    // Dark background: shades of white/gray based on W (6 bands) - highest W = brightest
+                    if normalized_w > 0.83 {
+                        Color::new(1.0, 1.0, 1.0, 1.0) // White (highest W)
+                    } else if normalized_w > 0.67 {
+                        Color::new(0.9, 0.9, 0.9, 1.0) // Very light gray
+                    } else if normalized_w > 0.50 {
+                        Color::new(0.8, 0.8, 0.8, 1.0) // Light gray
+                    } else if normalized_w > 0.33 {
+                        Color::new(0.7, 0.7, 0.7, 1.0) // Medium gray
+                    } else if normalized_w > 0.17 {
+                        Color::new(0.6, 0.6, 0.6, 1.0) // Dark gray
+                    } else {
+                        Color::new(0.5, 0.5, 0.5, 1.0) // Very dark gray (lowest W)
+                    }
+                } else {
+                    // Light background: shades of black/gray based on W (6 bands) - highest W = darkest
+                    if normalized_w > 0.83 {
+                        Color::new(0.0, 0.0, 0.0, 1.0) // Black (highest W)
+                    } else if normalized_w > 0.67 {
+                        Color::new(0.2, 0.2, 0.2, 1.0) // Very dark gray
+                    } else if normalized_w > 0.50 {
+                        Color::new(0.4, 0.4, 0.4, 1.0) // Dark gray
+                    } else if normalized_w > 0.33 {
+                        Color::new(0.6, 0.6, 0.6, 1.0) // Medium gray
+                    } else if normalized_w > 0.17 {
+                        Color::new(0.8, 0.8, 0.8, 1.0) // Light gray
+                    } else {
+                        Color::new(0.9, 0.9, 0.9, 1.0) // Very light gray (lowest W)
+                    }
+                }
+            } else if self.depth_coloring {
+                // Use frame-wide Z range for consistent coloring
+                // Invert the calculation so closer edges (lower Z) get higher normalized values
+                let z_range = frame_max_z - frame_min_z;
+                let normalized_z = if z_range > 0.001 {
+                    1.0 - (avg_z - frame_min_z) / z_range  // Invert: closer = higher normalized_z
+                } else {
+                    0.5 // Default to middle if no range
+                };
+                
+                // Debug: Print normalized Z values for first few edges
+                if should_print_debug && edge_data.len() < 5 {
+                    println!("Edge {}: avg_z={:.3}, normalized_z={:.3}", edge_data.len(), avg_z, normalized_z);
+                }
+                
+                // Create more color bands for better distribution
+                if self.dark_background {
+                    // Dark background: shades of white/gray (6 bands) - closest = brightest
+                    if normalized_z > 0.83 {
+                        Color::new(1.0, 1.0, 1.0, 1.0) // White (closest)
+                    } else if normalized_z > 0.67 {
+                        Color::new(0.9, 0.9, 0.9, 1.0) // Very light gray
+                    } else if normalized_z > 0.50 {
+                        Color::new(0.8, 0.8, 0.8, 1.0) // Light gray
+                    } else if normalized_z > 0.33 {
+                        Color::new(0.7, 0.7, 0.7, 1.0) // Medium gray
+                    } else if normalized_z > 0.17 {
+                        Color::new(0.6, 0.6, 0.6, 1.0) // Dark gray
+                    } else {
+                        Color::new(0.5, 0.5, 0.5, 1.0) // Very dark gray (farthest)
+                    }
+                } else {
+                    // Light background: dark colors (6 bands) - closest = darkest
+                    if normalized_z > 0.83 {
+                        Color::new(0.0, 0.0, 0.0, 1.0) // Black (closest)
+                    } else if normalized_z > 0.67 {
+                        Color::new(0.2, 0.2, 0.2, 1.0) // Very dark gray
+                    } else if normalized_z > 0.50 {
+                        Color::new(0.4, 0.4, 0.4, 1.0) // Dark gray
+                    } else if normalized_z > 0.33 {
+                        Color::new(0.6, 0.6, 0.6, 1.0) // Medium gray
+                    } else if normalized_z > 0.17 {
+                        Color::new(0.7, 0.7, 0.7, 1.0) // Light gray (darker)
+                    } else {
+                        Color::new(0.8, 0.8, 0.8, 1.0) // Very light gray (darker)
+                    }
+                }
+            } else {
+                // Uniform color when depth coloring is off
+                if self.dark_background {
+                    Color::new(0.8, 0.8, 0.8, 1.0)
+                } else {
+                    Color::new(0.2, 0.2, 0.2, 1.0)
+                }
+            };
+            
+            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, wire_color);
         }
         
         
@@ -1552,7 +1670,7 @@ async fn main() {
             );
             
             draw_text(
-                "Press C to toggle depth coloring",
+                "Press Z to toggle depth coloring",
                 10.0,
                 260.0,
                 18.0,
@@ -1560,9 +1678,33 @@ async fn main() {
             );
             
             draw_text(
+                "Press W to toggle W-depth coloring",
+                10.0,
+                280.0,
+                18.0,
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
+            );
+            
+            draw_text(
+                "Press H to toggle 3D/4D mode",
+                10.0,
+                300.0,
+                18.0,
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
+            );
+            
+            draw_text(
+                "Press J to cycle through hypersolids (4D only)",
+                10.0,
+                320.0,
+                18.0,
+                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
+            );
+            
+            draw_text(
                 "Press B to toggle background (black/white)",
                 10.0,
-                285.0,
+                340.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -1570,7 +1712,7 @@ async fn main() {
             draw_text(
                 "Press T to toggle all text/UI",
                 10.0,
-                310.0,
+                360.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -1578,7 +1720,7 @@ async fn main() {
             draw_text(
                 "Press O to toggle orthographic/perspective projection",
                 10.0,
-                335.0,
+                380.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -1586,7 +1728,7 @@ async fn main() {
             draw_text(
                 "Press S to cycle through Platonic solids",
                 10.0,
-                360.0,
+                400.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -1594,7 +1736,7 @@ async fn main() {
             draw_text(
                 "Press LEFT/RIGHT to adjust eye separation",
                 10.0,
-                385.0,
+                420.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -1602,7 +1744,7 @@ async fn main() {
             draw_text(
                 "Press UP/DOWN to adjust perspective (distance + scale)",
                 10.0,
-                410.0,
+                440.0,
                 18.0,
                 if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
             );
@@ -1680,9 +1822,20 @@ async fn main() {
             viewer.show_guides = !viewer.show_guides;
         }
         
-        if is_key_pressed(KeyCode::C) {
-            // Toggle depth coloring
+        if is_key_pressed(KeyCode::Z) {
+            // Toggle Z-depth coloring (disable W-depth if enabled)
             viewer.depth_coloring = !viewer.depth_coloring;
+            if viewer.depth_coloring {
+                viewer.w_depth_coloring = false; // Disable W-depth when Z-depth is enabled
+            }
+        }
+        
+        if is_key_pressed(KeyCode::W) {
+            // Toggle W-depth coloring (disable Z-depth if enabled)
+            viewer.w_depth_coloring = !viewer.w_depth_coloring;
+            if viewer.w_depth_coloring {
+                viewer.depth_coloring = false; // Disable Z-depth when W-depth is enabled
+            }
         }
         
         if is_key_pressed(KeyCode::T) {
@@ -1829,7 +1982,7 @@ async fn main() {
             let raw_velocity = (normalized * 0.04) - 0.02; // Range: -0.02 to 0.02
             
             // Create discrete steps: -0.02, -0.015, -0.01, -0.005, 0.00, 0.005, 0.01, 0.015, 0.02
-            let step_size = 0.005; // Larger step size for easier centering
+            let step_size = 0.0025; // Halved step size for finer control
             let velocity = (raw_velocity / step_size).round() * step_size;
             let velocity = velocity.clamp(-0.02, 0.02);
             
