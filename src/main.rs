@@ -534,7 +534,7 @@ impl StereogramViewer {
         
         // Draw edges from front to back (nearest first)
         for (_, start_2d, end_2d, wire_color) in edge_data {
-            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, wire_color);
+            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 2.0, wire_color);
         }
     }
 
@@ -852,30 +852,30 @@ impl StereogramViewer {
                     if normalized_z > 0.83 {
                         Color::new(1.0, 1.0, 1.0, 1.0) // White (closest)
                     } else if normalized_z > 0.67 {
-                        Color::new(0.9, 0.9, 0.9, 1.0) // Very light gray
+                        Color::new(0.95, 0.95, 0.95, 1.0) // Very light gray
                     } else if normalized_z > 0.50 {
-                        Color::new(0.8, 0.8, 0.8, 1.0) // Light gray
+                        Color::new(0.9, 0.9, 0.9, 1.0) // Light gray
                     } else if normalized_z > 0.33 {
-                        Color::new(0.7, 0.7, 0.7, 1.0) // Medium gray
+                        Color::new(0.85, 0.85, 0.85, 1.0) // Medium-light gray
                     } else if normalized_z > 0.17 {
-                        Color::new(0.6, 0.6, 0.6, 1.0) // Dark gray
+                        Color::new(0.8, 0.8, 0.8, 1.0) // Medium gray
                     } else {
-                        Color::new(0.5, 0.5, 0.5, 1.0) // Very dark gray (farthest)
+                        Color::new(0.75, 0.75, 0.75, 1.0) // Light gray (farthest)
                     }
                 } else {
                     // Light background: dark colors (6 bands) - closest = darkest
                     if normalized_z > 0.83 {
-                        Color::new(0.0, 0.0, 0.0, 1.0) // Black (closest)
+                        Color::new(0.1, 0.1, 0.1, 1.0) // Very dark gray (closest)
                     } else if normalized_z > 0.67 {
-                        Color::new(0.2, 0.2, 0.2, 1.0) // Very dark gray
+                        Color::new(0.25, 0.25, 0.25, 1.0) // Dark gray
                     } else if normalized_z > 0.50 {
-                        Color::new(0.4, 0.4, 0.4, 1.0) // Dark gray
+                        Color::new(0.4, 0.4, 0.4, 1.0) // Medium-dark gray
                     } else if normalized_z > 0.33 {
-                        Color::new(0.6, 0.6, 0.6, 1.0) // Medium gray
+                        Color::new(0.55, 0.55, 0.55, 1.0) // Medium gray
                     } else if normalized_z > 0.17 {
-                        Color::new(0.7, 0.7, 0.7, 1.0) // Light gray (darker)
+                        Color::new(0.7, 0.7, 0.7, 1.0) // Light gray
                     } else {
-                        Color::new(0.8, 0.8, 0.8, 1.0) // Very light gray (darker)
+                        Color::new(0.85, 0.85, 0.85, 1.0) // Very light gray (farthest)
                     }
                 }
             } else {
@@ -887,7 +887,7 @@ impl StereogramViewer {
                 }
             };
             
-            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 3.0, wire_color);
+            draw_line(start_2d.x, start_2d.y, end_2d.x, end_2d.y, 2.0, wire_color);
         }
         
         
