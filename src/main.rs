@@ -427,7 +427,7 @@ impl StereogramViewer {
         )
     }
 
-    fn draw_solid_wireframe(&self, camera_offset: f32, screen_offset_x: f32) {
+    fn draw_solid_wireframe(&self, camera_offset: f32, screen_offset_x: f32, viewport_width: f32) {
         // Apply rotation to vertices first
         // Create rotation matrices for each axis
         let rot_x_matrix = Mat4::from_rotation_x(self.rotation_x);
@@ -438,7 +438,7 @@ impl StereogramViewer {
         let combined_rotation = rot_z_matrix * rot_y_matrix * rot_x_matrix;
 
         // Transform and project vertices to 2D screen space manually
-        let screen_center_x = screen_width() / 4.0 + screen_offset_x; // Quarter width + offset for each view
+        let screen_center_x = viewport_width / 4.0 + screen_offset_x; // Quarter width + offset for each view
         let screen_center_y = screen_height() / 2.0;
         // Adjust scale to maintain cube size as perspective changes
         let base_scale = 180.0;
@@ -541,7 +541,20 @@ impl StereogramViewer {
     fn render_stereogram(&mut self) {
         let screen_width = screen_width();
         let screen_height = screen_height();
-        let half_width = screen_width / 2.0;
+        
+        // Stereogram always uses the left portion of the screen
+        let stereogram_width = screen_width.min(393.0); // Optimal width for stereogram fusion
+        let half_stereogram_width = stereogram_width / 2.0;
+        
+        // Determine help panel width (smaller on web to avoid covering view)
+        if self.show_ui {
+            // Calculate panel width (used in UI layout)
+            #[cfg(target_arch = "wasm32")]
+            let _panel_width = (screen_width - stereogram_width - 20.0).clamp(120.0, 220.0);
+            #[cfg(not(target_arch = "wasm32"))]
+            let _panel_width = 270.0;
+            let _ = _panel_width; // keep variable from unused warnings
+        }
         
         // Clear the screen with current background setting
         if self.dark_background {
@@ -553,18 +566,18 @@ impl StereogramViewer {
         // Use default 2D camera for all rendering
         set_default_camera();
         
-        // Render left eye view (left half of screen)
+        // Render left eye view (left half of stereogram area)
         if self.is_4d_mode {
-            self.draw_4d_hypersolid_wireframe(-self.eye_separation, 0.0);
+            self.draw_4d_hypersolid_wireframe(-self.eye_separation, 0.0, stereogram_width);
         } else {
-            self.draw_solid_wireframe(-self.eye_separation, 0.0);
+            self.draw_solid_wireframe(-self.eye_separation, 0.0, stereogram_width);
         }
         
-        // Render right eye view (right half of screen)  
+        // Render right eye view (right half of stereogram area)  
         if self.is_4d_mode {
-            self.draw_4d_hypersolid_wireframe(self.eye_separation, half_width);
+            self.draw_4d_hypersolid_wireframe(self.eye_separation, half_stereogram_width, stereogram_width);
         } else {
-            self.draw_solid_wireframe(self.eye_separation, half_width);
+            self.draw_solid_wireframe(self.eye_separation, half_stereogram_width, stereogram_width);
         }
         
         // Draw guides only if show_guides is true
@@ -574,17 +587,17 @@ impl StereogramViewer {
             let fusion_aid_size = 6.0; // Smaller for less distraction
             let outline_thickness = 2.0; // Thin outline
             
-            // Left fusion aid (center of left half)
-            let left_aid_x = half_width / 2.0;
+            // Left fusion aid (center of left half of stereogram)
+            let left_aid_x = half_stereogram_width / 2.0;
             draw_circle_lines(left_aid_x, fusion_aid_y, fusion_aid_size, outline_thickness, RED);
             
-            // Right fusion aid (center of right half)
-            let right_aid_x = half_width + half_width / 2.0;
+            // Right fusion aid (center of right half of stereogram)
+            let right_aid_x = half_stereogram_width + half_stereogram_width / 2.0;
             draw_circle_lines(right_aid_x, fusion_aid_y, fusion_aid_size, outline_thickness, RED);
         }
     }
     
-    fn draw_4d_hypersolid_wireframe(&mut self, camera_offset: f32, screen_offset_x: f32) {
+    fn draw_4d_hypersolid_wireframe(&mut self, camera_offset: f32, screen_offset_x: f32, viewport_width: f32) {
         // Debug: Print vertex coordinates when paused (only once per pause)
         let should_print_debug = self.is_paused && !self.debug_printed;
         if should_print_debug {
@@ -648,12 +661,11 @@ impl StereogramViewer {
         }
         
         // Calculate 2D screen positions with proper scaling
-        // Scale to fit 25% of screen width and center the object
-        let screen_width = screen_width();
+        // Scale to fit 25% of viewport width and center the object
         let screen_height = screen_height();
-        let target_width = screen_width * 0.25; // 25% of screen width for proper sizing
-        let half_screen_width = screen_width * 0.5;
-        let viewport_center_x = screen_offset_x + half_screen_width * 0.5; // Center in the quarter-screen viewport
+        let target_width = viewport_width * 0.25; // 25% of viewport width for proper sizing
+        let half_viewport_width = viewport_width * 0.5;
+        let viewport_center_x = screen_offset_x + half_viewport_width * 0.5; // Center in the quarter-screen viewport
         let viewport_center_y = screen_height * 0.5;
         
         // Find the bounding box of the rotated vertices to determine scale
@@ -898,7 +910,7 @@ impl StereogramViewer {
 fn window_conf() -> Conf {
     Conf {
         window_title: "iPhone Stereogram Viewer".to_owned(),
-        window_width: 393,
+        window_width: 663, // 393 (stereogram) + 270 (panel)
         window_height: 852,
         ..Default::default()
     }
@@ -1536,7 +1548,7 @@ async fn main() {
             );
         }
         
-        // Mode and shape label below buttons - always visible
+        // Mode and shape label below buttons - always visible (moved to safe position)
         let mode_text = if viewer.is_4d_mode {
             format!("4D {}", viewer.current_hypersolid.name())
         } else {
@@ -1545,266 +1557,164 @@ async fn main() {
         draw_text(
             &mode_text,
             10.0,
-            60.0, // Moved down below the buttons (which are at y=10-50)
+            50.0, // Just below buttons
             20.0,
             if viewer.dark_background { WHITE } else { BLACK }
         );
         
         if viewer.show_ui {
-            draw_text(
-                "3D/4D Hypersolids Stereogram Viewer",
-                90.0,
-                30.0,
-                25.0,
+            let screen_width = screen_width();
+            let screen_height = screen_height();
+            let stereogram_width = screen_width.min(393.0);
+            
+            // Determine help panel width (match stereogram-side calculations)
+            let panel_width = if cfg!(target_arch = "wasm32") {
+                (screen_width - stereogram_width - 20.0).clamp(120.0, 220.0)
+            } else {
+                270.0
+            };
+            
+            // Create right-side help panel with semi-transparent background
+            let min_panel_x = stereogram_width + 10.0;
+            let panel_x = (screen_width - panel_width - 10.0).max(min_panel_x);
+            let panel_y = 10.0;
+            let panel_height = screen_height - 20.0;
+            
+            // Draw semi-transparent panel background
+            draw_rectangle(
+                panel_x,
+                panel_y,
+                panel_width,
+                panel_height,
+                if viewer.dark_background {
+                    Color::new(0.0, 0.0, 0.0, 0.85) // Dark semi-transparent
+                } else {
+                    Color::new(1.0, 1.0, 1.0, 0.9) // Light semi-transparent
+                }
+            );
+            
+            // Draw panel border
+            draw_rectangle_lines(
+                panel_x,
+                panel_y,
+                panel_width,
+                panel_height,
+                2.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
+            // Panel title
             draw_text(
-                "Left Eye | Right Eye",
-                10.0,
-                60.0,
+                "CONTROLS",
+                panel_x + 10.0,
+                panel_y + 25.0,
                 20.0,
                 if viewer.dark_background { WHITE } else { BLACK }
             );
             
-            // Show current mode (3D or 4D)
-            let mode_text = if viewer.is_4d_mode {
-                format!("4D Mode: {}", viewer.current_hypersolid.name())
-            } else {
-                format!("3D Mode: {}", viewer.current_solid.name())
-            };
-            draw_text(
-                &mode_text,
-                10.0,
-                80.0,
-                18.0,
-                if viewer.dark_background { WHITE } else { BLACK }
-            );
+            // Start help text after title
+            let mut help_y = panel_y + 55.0;
             
-            // Debug info for 4D mode (only show in 4D mode)
-            if viewer.is_4d_mode {
-                let vertices_4d = viewer.get_4d_vertices();
-                if !vertices_4d.is_empty() {
-                    let first_4d = &vertices_4d[0];
-                    draw_text(&format!("4D: ({:.1}, {:.1}, {:.1}, {:.1})", first_4d.x, first_4d.y, first_4d.z, first_4d.w), 
-                            10.0, 100.0, 16.0, BLUE);
-                    draw_text(&format!("Vertices: {}", vertices_4d.len()), 
-                            10.0, 120.0, 16.0, GREEN);
-                }
-            }
-            
-            // Show rotation angles based on mode
-            let rotation_y_start = if viewer.is_4d_mode { 140.0 } else { 100.0 };
-            
-            if viewer.is_4d_mode {
-                // Show 4D rotations
-                let color = if viewer.dark_background { WHITE } else { BLACK };
-                draw_text("4D Rotations:", 10.0, rotation_y_start, 16.0, color);
-                draw_text(&format!("XY: {:.1}°", viewer.rotation_xy.to_degrees()), 10.0, rotation_y_start + 20.0, 16.0, color);
-                draw_text(&format!("XZ: {:.1}°", viewer.rotation_xz.to_degrees()), 10.0, rotation_y_start + 40.0, 16.0, color);
-                draw_text(&format!("YZ: {:.1}°", viewer.rotation_yz.to_degrees()), 10.0, rotation_y_start + 60.0, 16.0, color);
-                draw_text(&format!("XW: {:.1}°", viewer.rotation_xw.to_degrees()), 10.0, rotation_y_start + 80.0, 16.0, color);
-                draw_text(&format!("YW: {:.1}°", viewer.rotation_yw.to_degrees()), 10.0, rotation_y_start + 100.0, 16.0, color);
-                draw_text(&format!("ZW: {:.1}°", viewer.rotation_zw.to_degrees()), 10.0, rotation_y_start + 120.0, 16.0, color);
-            } else {
-                // Show 3D rotations
-                draw_text(
-                    &format!("Rotation X: {:.1}°", viewer.rotation_x.to_degrees()),
-                    10.0,
-                    rotation_y_start,
-                    18.0,
-                    if viewer.dark_background { WHITE } else { BLACK }
-                );
-                
-                draw_text(
-                    &format!("Rotation Y: {:.1}°", viewer.rotation_y.to_degrees()),
-                    10.0,
-                    rotation_y_start + 20.0,
-                    18.0,
-                    if viewer.dark_background { WHITE } else { BLACK }
-                );
-                
-                draw_text(
-                    &format!("Rotation Z: {:.1}°", viewer.rotation_z.to_degrees()),
-                    10.0,
-                    rotation_y_start + 40.0,
-                    18.0,
-                    if viewer.dark_background { WHITE } else { BLACK }
-                );
-            }
-            
+            // Left side: Status info (rotations, mode, etc.) - organized in a clear area
+            let status_y = 80.0;
+            let status_color = if viewer.dark_background { WHITE } else { BLACK };
             
             // Show pause status
             if viewer.is_paused {
                 draw_text(
                     "PAUSED",
                     10.0,
-                    165.0,
+                    status_y,
                     25.0,
                     RED
                 );
             }
             
+            // Show rotation angles based on mode
+            if viewer.is_4d_mode {
+                // Show 4D rotations
+                draw_text("4D Rotations:", 10.0, status_y + 35.0, 16.0, status_color);
+                draw_text(&format!("XY: {:.1}°", viewer.rotation_xy.to_degrees()), 10.0, status_y + 55.0, 14.0, status_color);
+                draw_text(&format!("XZ: {:.1}°", viewer.rotation_xz.to_degrees()), 10.0, status_y + 75.0, 14.0, status_color);
+                draw_text(&format!("YZ: {:.1}°", viewer.rotation_yz.to_degrees()), 10.0, status_y + 95.0, 14.0, status_color);
+                draw_text(&format!("XW: {:.1}°", viewer.rotation_xw.to_degrees()), 10.0, status_y + 115.0, 14.0, status_color);
+                draw_text(&format!("YW: {:.1}°", viewer.rotation_yw.to_degrees()), 10.0, status_y + 135.0, 14.0, status_color);
+                draw_text(&format!("ZW: {:.1}°", viewer.rotation_zw.to_degrees()), 10.0, status_y + 155.0, 14.0, status_color);
+            } else {
+                // Show 3D rotations
+                draw_text("3D Rotations:", 10.0, status_y + 35.0, 16.0, status_color);
+                draw_text(&format!("X: {:.1}°", viewer.rotation_x.to_degrees()), 10.0, status_y + 55.0, 14.0, status_color);
+                draw_text(&format!("Y: {:.1}°", viewer.rotation_y.to_degrees()), 10.0, status_y + 75.0, 14.0, status_color);
+                draw_text(&format!("Z: {:.1}°", viewer.rotation_z.to_degrees()), 10.0, status_y + 95.0, 14.0, status_color);
+            }
+            
+            // Help text in right panel - organized by category
+            let text_color = if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) };
+            let hint_color = if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) };
+            let info_color = if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) };
+            
+            // Fusion hint
             draw_text(
-                "Look \"through\" the image to see 3D effect!",
-                10.0,
-                180.0,
-                18.0,
-                if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) } // Dark yellow for white background
-            );
-            
-            draw_text(
-                "Press SPACE to pause/resume animation",
-                10.0,
-                210.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) } // Dark green for white background
-            );
-            
-            draw_text(
-                "Press G to toggle guides",
-                10.0,
-                235.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press Z to toggle depth coloring",
-                10.0,
-                260.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press W to toggle W-depth coloring",
-                10.0,
-                280.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press H to toggle 3D/4D mode",
-                10.0,
-                300.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press J to cycle through hypersolids (4D only)",
-                10.0,
-                320.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press B to toggle background (black/white)",
-                10.0,
-                340.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press T to toggle all text/UI",
-                10.0,
-                360.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press O to toggle orthographic/perspective projection",
-                10.0,
-                380.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press S to cycle through Platonic solids",
-                10.0,
-                400.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press LEFT/RIGHT to adjust eye separation",
-                10.0,
-                420.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Press UP/DOWN to adjust perspective (distance + scale)",
-                10.0,
-                440.0,
-                18.0,
-                if viewer.dark_background { LIME } else { Color::new(0.0, 0.4, 0.0, 1.0) }
-            );
-            
-            draw_text(
-                "Fusion tips: Focus THROUGH screen, merge red circles",
-                10.0,
-                480.0,
-                18.0,
-                if viewer.dark_background { YELLOW } else { Color::new(0.8, 0.6, 0.0, 1.0) }
-            );
-            
-            // Show current eye separation value
-            draw_text(
-                &format!("Eye Separation: {:.3}", viewer.eye_separation),
-                10.0,
-                375.0,
-                18.0,
-                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) } // Dark orange for white background
-            );
-            
-            // Show current perspective distance
-            draw_text(
-                &format!("Perspective Distance: {:.1}", viewer.perspective_distance),
-                10.0,
-                400.0,
-                18.0,
-                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) }
-            );
-            
-            // Show current projection mode
-            draw_text(
-                &format!("Projection: {}", if viewer.orthographic { "Orthographic" } else { "Perspective" }),
-                10.0,
-                425.0,
-                18.0,
-                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) }
-            );
-            
-            // Show current solid
-            draw_text(
-                &format!("Solid: {}", viewer.current_solid.name()),
-                10.0,
-                450.0,
-                18.0,
-                if viewer.dark_background { ORANGE } else { Color::new(0.8, 0.4, 0.0, 1.0) }
-            );
-            
-
-            
-
-            
-            // Draw distance indicator
-            draw_text(
-                &format!("Distance: {:.1} units", viewer.eye_separation * 2.0),
-                10.0,
-                400.0,
+                "Focus THROUGH screen to see 3D!",
+                panel_x + 10.0,
+                help_y,
                 16.0,
-                ORANGE
+                hint_color
             );
+            help_y += 25.0;
+            
+            // Basic controls
+            draw_text("Basic Controls:", panel_x + 10.0, help_y, 16.0, status_color);
+            help_y += 22.0;
+            
+            // Basic controls in right panel
+            draw_text("SPACE - Pause/Resume", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("G - Toggle guides", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("T - Toggle UI", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("B - Background color", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 30.0;
+            
+            // Viewing controls
+            draw_text("Viewing:", panel_x + 10.0, help_y, 16.0, status_color);
+            help_y += 22.0;
+            draw_text("Z - Z-depth coloring", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("W - W-depth coloring", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("O - Projection mode", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("←/→ - Eye separation", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("↑/↓ - Perspective", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 30.0;
+            
+            // Mode controls
+            draw_text("Mode:", panel_x + 10.0, help_y, 16.0, status_color);
+            help_y += 22.0;
+            draw_text("H - Toggle 3D/4D", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("S - 3D solids", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 20.0;
+            draw_text("J - 4D hypersolids", panel_x + 10.0, help_y, 14.0, text_color);
+            help_y += 30.0;
+            
+            // Status info in right panel
+            draw_text("Status:", panel_x + 10.0, help_y, 16.0, status_color);
+            help_y += 22.0;
+            draw_text(&format!("Eye Sep: {:.3}", viewer.eye_separation), panel_x + 10.0, help_y, 14.0, info_color);
+            help_y += 20.0;
+            draw_text(&format!("Distance: {:.1}", viewer.perspective_distance), panel_x + 10.0, help_y, 14.0, info_color);
+            help_y += 20.0;
+            draw_text(&format!("Projection: {}", if viewer.orthographic { "Ortho" } else { "Persp" }), panel_x + 10.0, help_y, 14.0, info_color);
+            help_y += 20.0;
+            if !viewer.is_4d_mode {
+                draw_text(&format!("Solid: {}", viewer.current_solid.name()), panel_x + 10.0, help_y, 14.0, info_color);
+            }
+            
+
         }
         
         // Handle input

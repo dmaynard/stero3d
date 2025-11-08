@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stereo3D - 3D Stereogram Platonic Solids Viewer</title>
+    <title>Stereo3D - 3D/4D Stereogram Viewer</title>
     <style>
         html,
         body {
@@ -25,7 +25,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 440px; /* Optimal width for stereogram viewing (10% wider) */
+            width: 600px; /* Wider layout to accommodate stereogram + help panel */
             height: 660px; /* Maintain aspect ratio */
             background: black;
             border: 2px solid #333;
@@ -48,9 +48,9 @@
         /* Responsive design - adjust width on smaller screens */
         @media (max-width: 500px) {
             .stereogram-container {
-                width: 90vw;
+                width: 95vw;
                 height: 60vh;
-                max-width: 440px;
+                max-width: 600px;
                 max-height: 660px;
             }
         }
@@ -184,16 +184,19 @@
     <!-- Description overlay -->
     <div class="description-overlay" id="descriptionOverlay">
         <div class="description-content">
-            <div class="description-title">Stereo3D - 3D Stereogram Platonic Solids Viewer</div>
+            <div class="description-title">Stereo3D - 3D/4D Stereogram Viewer</div>
             <div class="description-text">
                 <p>
                     Welcome to <strong>Stereo3D</strong>, a real-time 3D stereogram viewer that displays rotating wireframe Platonic solids 
-                    using the parallel stereogram technique. View true 3D without special glasses!
+                    and 4D hypersolids using the parallel stereogram technique. View true 3D without special glasses, and explore the 
+                    fascinating world of 4-dimensional geometry!
                 </p>
                 
                 <p>
                     This application was built with Rust and the Macroquad game engine, creating a smooth, 
-                    interactive 3D stereogram experience that works right in your web browser.
+                    interactive 3D/4D stereogram experience that works right in your web browser. Explore both 
+                    3D Platonic solids and 4D hypersolids (Tesseract, 4-Simplex, 4-Orthoplex) with advanced 
+                    visualization features including Z-depth and W-depth coloring.
                 </p>
                 
                 <p>
@@ -208,17 +211,27 @@
                     <strong>Animation Controls:</strong><br>
                     • <em>SPACE:</em> Toggle pause/resume animation<br>
                     <br>
+                    <strong>Mode Selection:</strong><br>
+                    • <em>H:</em> Toggle between 3D and 4D modes<br>
+                    • <em>S:</em> Cycle through Platonic solids (3D mode): Tetrahedron → Cube → Octahedron → Dodecahedron → Icosahedron<br>
+                    • <em>J:</em> Cycle through hypersolids (4D mode): Tesseract → 4-Simplex → 4-Orthoplex<br>
+                    <br>
                     <strong>Viewing Adjustments:</strong><br>
                     • <em>LEFT/RIGHT Arrow:</em> Adjust eye separation (0.01 to 0.20)<br>
-                    • <em>UP/DOWN Arrow:</em> Adjust perspective distance and cube scale (2.0 to 20.0)<br>
+                    • <em>UP/DOWN Arrow:</em> Adjust perspective distance and object scale (2.0 to 20.0)<br>
                     <br>
                     <strong>Display Options:</strong><br>
-                    • <em>S:</em> Cycle through Platonic solids (Tetrahedron → Cube → Octahedron → Dodecahedron → Icosahedron)<br>
                     • <em>G:</em> Toggle fusion guides (red circles)<br>
-                    • <em>C:</em> Toggle depth-based wireframe coloring<br>
+                    • <em>Z:</em> Toggle Z-depth coloring (visualizes 3D depth using Z-coordinate)<br>
+                    • <em>W:</em> Toggle W-depth coloring (visualizes 4th dimension depth, 4D mode only)<br>
                     • <em>B:</em> Toggle between black/white backgrounds<br>
                     • <em>O:</em> Toggle orthographic/perspective projection<br>
-                    • <em>T:</em> Toggle all on-screen text and UI elements
+                    • <em>T:</em> Toggle all on-screen text and UI elements<br>
+                    <br>
+                    <strong>Manual Controls:</strong><br>
+                    • <em>3D/4D Button:</em> Open rotation controls panel with interactive sliders<br>
+                    &nbsp;&nbsp;&nbsp;• 3D Mode: Control X, Y, Z rotation angles and velocities<br>
+                    &nbsp;&nbsp;&nbsp;• 4D Mode: Control 6 rotation planes (XY, XZ, YZ, XW, YW, ZW)
                 </div>
                 
                 <p>
@@ -243,17 +256,33 @@
                 </p>
                 
                 <p>
-                    The wireframe rendering includes depth-based coloring where closer wires appear brighter 
-                    and farther wires appear darker, helping your brain understand the 3D structure.
+                    The wireframe rendering uses clean 2-pixel lines with optional depth-based coloring:
+                    <br>• <em>Z-depth coloring (Z key):</em> Visualizes 3D depth using gradient coloring based on Z-coordinate (closer edges are darker on white background, lighter on black background)
+                    <br>• <em>W-depth coloring (W key):</em> Visualizes 4th dimension depth using gradient coloring based on W-coordinate (4D mode only)
+                    <br>These depth visualization features help your brain understand the 3D/4D structure more clearly.
                 </p>
                 
                 <p>
-                    <strong>Platonic Solids:</strong><br>
+                    The app features an organized UI layout with a help panel that doesn't obstruct the stereogram view, 
+                    allowing you to see both the controls and the 3D visualization simultaneously.
+                </p>
+                
+                <p>
+                    <strong>Platonic Solids (3D Mode):</strong><br>
                     • <em>Tetrahedron:</em> 4 triangular faces, simplest 3D solid<br>
                     • <em>Cube:</em> 6 square faces, most familiar solid<br>
                     • <em>Octahedron:</em> 8 triangular faces, dual of the cube<br>
                     • <em>Dodecahedron:</em> 12 pentagonal faces, golden ratio proportions<br>
                     • <em>Icosahedron:</em> 20 triangular faces, dual of the dodecahedron
+                </p>
+                
+                <p>
+                    <strong>4D Hypersolids (Press H to enter 4D mode):</strong><br>
+                    • <em>Tesseract (4D Hypercube):</em> The 4D analogue of a cube, with 16 vertices, 32 edges, 24 square faces, and 8 cubic cells<br>
+                    • <em>4-Simplex (4D Tetrahedron):</em> The 4D analogue of a tetrahedron, with 5 vertices, 10 edges, 10 triangular faces, and 5 tetrahedral cells<br>
+                    • <em>4-Orthoplex (4D Octahedron):</em> The 4D analogue of an octahedron, with 8 vertices, 24 edges, 32 triangular faces, and 16 tetrahedral cells<br>
+                    <br>
+                    These hypersolids are projected from 4D space into 3D space, then rendered as 3D stereograms. Use <em>W-depth coloring (W key)</em> to visualize the 4th dimension by coloring edges based on their W-coordinate values. The app supports rotation in all 6 rotation planes of 4D space (XY, XZ, YZ, XW, YW, ZW), allowing you to explore these fascinating 4D objects interactively.
                 </p>
                 
                 <p>
