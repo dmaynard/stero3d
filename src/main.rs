@@ -266,9 +266,9 @@ impl StereogramViewer {
             rotation_x: 0.0,
             rotation_y: 0.0,
             rotation_z: 0.0,
-            rotation_velocity_x: 0.0, // Turn off automatic rotations for debugging
-            rotation_velocity_y: 0.0,  // Turn off automatic rotations for debugging
-            rotation_velocity_z: 0.0, // Turn off automatic rotations for debugging
+            rotation_velocity_x: rand::gen_range(-0.01, 0.01), // Small random rotation velocities
+            rotation_velocity_y: rand::gen_range(-0.01, 0.01),  // Small random rotation velocities
+            rotation_velocity_z: rand::gen_range(-0.01, 0.01), // Small random rotation velocities
             // 4D rotations initialized to 0
             rotation_xy: 0.0,
             rotation_xz: 0.0,
@@ -276,12 +276,12 @@ impl StereogramViewer {
             rotation_xw: 0.0,
             rotation_yw: 0.0,
             rotation_zw: 0.0,
-            rotation_velocity_xy: 0.0, // Turn off automatic 4D rotations for debugging
-            rotation_velocity_xz: 0.0,
-            rotation_velocity_yz: 0.0,
-            rotation_velocity_xw: 0.0, // Turn off automatic 4D rotations for debugging
-            rotation_velocity_yw: 0.0,
-            rotation_velocity_zw: 0.0,
+            rotation_velocity_xy: rand::gen_range(-0.01, 0.01), // Small random 4D rotation velocities
+            rotation_velocity_xz: rand::gen_range(-0.01, 0.01), // Small random 4D rotation velocities
+            rotation_velocity_yz: rand::gen_range(-0.01, 0.01), // Small random 4D rotation velocities
+            rotation_velocity_xw: rand::gen_range(-0.01, 0.01), // Small random 4D rotation velocities
+            rotation_velocity_yw: rand::gen_range(-0.01, 0.01), // Small random 4D rotation velocities
+            rotation_velocity_zw: rand::gen_range(-0.01, 0.01), // Small random 4D rotation velocities
             eye_separation: 0.06, // Reduced for iPhone dimensions
             perspective_distance: 5.0, // Much smaller perspective distance for unit objects
             is_paused: false,
@@ -539,18 +539,26 @@ impl StereogramViewer {
     }
 
     fn render_stereogram(&mut self) {
-        let screen_width = screen_width();
+        let raw_screen_width = screen_width();
         let screen_height = screen_height();
         
+        // For web version, treat display width like native version (constrained)
+        // Native: window is 663px (393px stereogram + 270px panel)
+        // Web: constrain to match native behavior
+        #[cfg(target_arch = "wasm32")]
+        let display_width = raw_screen_width.min(663.0); // Match native window width
+        #[cfg(not(target_arch = "wasm32"))]
+        let display_width = raw_screen_width;
+        
         // Stereogram always uses the left portion of the screen
-        let stereogram_width = screen_width.min(393.0); // Optimal width for stereogram fusion
+        let stereogram_width = display_width.min(393.0); // Optimal width for stereogram fusion
         let half_stereogram_width = stereogram_width / 2.0;
         
         // Determine help panel width (smaller on web to avoid covering view)
         if self.show_ui {
             // Calculate panel width (used in UI layout)
             #[cfg(target_arch = "wasm32")]
-            let _panel_width = (screen_width - stereogram_width - 20.0).clamp(120.0, 220.0);
+            let _panel_width = (display_width - stereogram_width - 20.0).clamp(120.0, 220.0);
             #[cfg(not(target_arch = "wasm32"))]
             let _panel_width = 270.0;
             let _ = _panel_width; // keep variable from unused warnings
@@ -1563,20 +1571,27 @@ async fn main() {
         );
         
         if viewer.show_ui {
-            let screen_width = screen_width();
+            let raw_screen_width = screen_width();
             let screen_height = screen_height();
-            let stereogram_width = screen_width.min(393.0);
+            
+            // For web version, treat display width like native version (constrained)
+            #[cfg(target_arch = "wasm32")]
+            let display_width = raw_screen_width.min(663.0); // Match native window width
+            #[cfg(not(target_arch = "wasm32"))]
+            let display_width = raw_screen_width;
+            
+            let stereogram_width = display_width.min(393.0);
             
             // Determine help panel width (match stereogram-side calculations)
             let panel_width = if cfg!(target_arch = "wasm32") {
-                (screen_width - stereogram_width - 20.0).clamp(120.0, 220.0)
+                (display_width - stereogram_width - 20.0).clamp(120.0, 220.0)
             } else {
                 270.0
             };
             
             // Create right-side help panel with semi-transparent background
             let min_panel_x = stereogram_width + 10.0;
-            let panel_x = (screen_width - panel_width - 10.0).max(min_panel_x);
+            let panel_x = (display_width - panel_width - 10.0).max(min_panel_x);
             let panel_y = 10.0;
             let panel_height = screen_height - 20.0;
             
